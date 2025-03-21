@@ -100,21 +100,18 @@ def auto_summarize(file, model_name, summary_state):
     summary_generator = summarize_paper(file, model_name, summary_state)
     summary, new_summary_state = None, None
     
-    # Start a thread to generate suggestions in parallel
-    suggestions = []
-    def generate_suggestions_thread():
-        nonlocal suggestions
-        # Wait until the summary starts being generated
-        while not new_summary_state:
-            pass  # Busy-wait until the summary starts being generated
-        suggestions.extend(generate_follow_up_suggestions(new_summary_state, model_name))
-    
-    thread = threading.Thread(target=generate_suggestions_thread)
-    thread.start()
-    
     for chunk, new_summary_state in summary_generator:
         summary = chunk
-        yield summary, gr.update(choices=suggestions or ["Generating suggestions..."], interactive=bool(suggestions)), new_summary_state  # Yield summary first
+        yield summary, gr.update(choices=["Generating suggestions..."], interactive=False), new_summary_state  # Yield summary first
+    
+    # Generate prompt suggestions in parallel
+    def generate_suggestions():
+        nonlocal suggestions
+        suggestions.extend(generate_follow_up_suggestions(new_summary_state, model_name))
+    
+    suggestions = []
+    thread = threading.Thread(target=generate_suggestions)  # Use threading.Thread
+    thread.start()
     
     # Wait for suggestions to be generated
     thread.join()
@@ -151,11 +148,14 @@ def summarize_paper(file, model_name, summary_state):
         
         chat_history = []
         for chunk in query_ollama_model(predefined_prompt, model_name, stream=True):
+            # Update the last message in the chat history with the cumulative response
             if chat_history and chat_history[-1]["role"] == "assistant":
                 chat_history[-1] = chunk  # Replace the last assistant message
             else:
                 chat_history.append(chunk)  # Add a new assistant message
-            yield chat_history, chunk["content"]  # Yield as Chatbot-compatible format
+            
+            # Yield the updated chat history
+            yield chat_history, chunk["content"]
     
     except Exception as e:
         yield [{"role": "assistant", "content": f"An error occurred: {str(e)}"}], summary_state
@@ -166,13 +166,40 @@ def handle_suggestion_selection(selected_question, model_name, chat_history, sum
         yield chat_history, ""  # Return unchanged history and clear input
         return
     
+    # Add the selected question to the chat history
+    chat_history.append({"role": "user", "content": selected_question})
+    
     # Query the model with the selected question and stream the response
-    user_message_entry = {"role": "user", "content": selected_question}
-    chat_history.append(user_message_entry)
     full_response = ""
     for chunk in query_ollama_model(selected_question, model_name, context=summary_state, stream=True):
         full_response = chunk["content"]
-        chat_history[-1] = {"role": "assistant", "content": full_response}
+        # Update the last message in the chat history with the cumulative response
+        if chat_history and chat_history[-1]["role"] == "assistant":
+            chat_history[-1] = {"role": "assistant", "content": full_response}
+        else:
+            chat_history.append({"role": "assistant", "content": full_response})
+        
+        yield chat_history, ""  # Clear the input field
+
+# Function to handle custom follow-up questions with streaming
+def chat_wrapper(user_message, model_name, chat_history, summary_state):
+    if not user_message.strip():
+        yield chat_history, ""  # Return unchanged history and clear input
+        return
+    
+    # Add the user's question to the chat history
+    chat_history.append({"role": "user", "content": user_message})
+    
+    # Query the model with the follow-up question and summary as context
+    full_response = ""
+    for chunk in query_ollama_model(user_message, model_name, context=summary_state, stream=True):
+        full_response = chunk["content"]
+        # Update the last message in the chat history with the cumulative response
+        if chat_history and chat_history[-1]["role"] == "assistant":
+            chat_history[-1] = {"role": "assistant", "content": full_response}
+        else:
+            chat_history.append({"role": "assistant", "content": full_response})
+        
         yield chat_history, ""  # Clear the input field
 
 # Create the Gradio interface
@@ -196,7 +223,7 @@ with gr.Blocks() as demo:
         pdf_upload = gr.File(label="Upload Research Paper (PDF Only)", file_types=[".pdf"])
         chatbot = gr.Chatbot(label="Summary and Conversation", type="messages")  # Set type='messages'
         
-        # Dropdown for follow-up question suggestions (moved above the input field)
+        # Dropdown for follow-up question suggestions
         follow_up_suggestions = gr.Dropdown(label="Suggested Follow-Up Questions", choices=[], interactive=False)
         
         user_input = gr.Textbox(label="Your Question", placeholder="Type your follow-up question here...")
@@ -217,21 +244,6 @@ with gr.Blocks() as demo:
         )
         
         # Handle custom follow-up questions with streaming
-        def chat_wrapper(user_message, model_name, chat_history, summary_state):
-            if not user_message.strip():
-                yield chat_history, ""  # Return unchanged history and clear input
-                return
-            
-            # Query the model with the follow-up question and summary as context
-            user_message_entry = {"role": "user", "content": user_message}
-            chat_history.append(user_message_entry)
-            full_response = ""
-            for chunk in query_ollama_model(user_message, model_name, context=summary_state, stream=True):
-                full_response = chunk["content"]
-                chat_history[-1] = {"role": "assistant", "content": full_response}
-                yield chat_history, ""  # Clear the input field
-        
-        # Handle Enter key submission
         user_input.submit(
             chat_wrapper,
             inputs=[user_input, model_dropdown, chatbot, summary_state],
