@@ -1,15 +1,21 @@
 # HumanAI-Project
 A teaching tool that provides prompts to a small LLM
 
-Requirements:
+## Installation
+
+* Install uv
+* `uv sync`
+* `source .venv/bin/activate`
+
+# Requirements:
 1. Ollama running on the local host with the specific model (here gemma3:1b)
 2. Gradio
 
-Shortcuts: 
+# Shortcuts: 
 1. Enter: To ask the follow-up question
 2. Shift+Enter: To enter into a new line
 
-UI:
+# UI:
 1. Summarizes the paper by default
 2. Follow-up questions in the same tab as the summary
 3. Hardcoded the prompt (provided by Ian) to summarize the paper
@@ -19,7 +25,7 @@ UI:
 7. Live stream output
 8. Prompt Suggestions (3 prompts)
 
-To Do:
+# To Do:
 1. Dynamic Prompt Suggestion updation
 2. Test a better system to reduce the processing time.
 3. Dedicated Mcq generation (including prompt)
