@@ -1,5 +1,6 @@
 # HumanAI-Project
 A teaching tool that provides prompts to a small LLM
+
 Shortcuts: 
 1. Enter: To ask the follow-up question
 2. Shift+Enter: To enter into a new line
