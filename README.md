@@ -1,6 +1,10 @@
 # HumanAI-Project
 A teaching tool that provides prompts to a small LLM
 
+Requirements:
+1. Ollama running on the local host with the specific model (here gemma3:1b)
+2. Gradio
+
 Shortcuts: 
 1. Enter: To ask the follow-up question
 2. Shift+Enter: To enter into a new line
