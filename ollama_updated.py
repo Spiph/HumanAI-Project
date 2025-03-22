@@ -27,17 +27,14 @@ def query_ollama_model(prompt, model_name="gemma3:1b", context=None, stream=True
     ]
     if context:
         messages.insert(0, {"role": "system", "content": context})  # Add context as system message
-    
     payload = {
         "model": model_name,
         "messages": messages,
         "stream": stream  # Enable or disable streaming
     }
-    
     try:
         response = requests.post(OLLAMA_API_URL, json=payload, stream=stream)
         response.raise_for_status()  # Raise an error for bad responses
-        
         if stream:
             full_response = ""
             for line in response.iter_lines():
@@ -56,28 +53,29 @@ def query_ollama_model(prompt, model_name="gemma3:1b", context=None, stream=True
                     if "message" in data and "content" in data["message"]:
                         full_response += data["message"]["content"]
             yield {"role": "assistant", "content": full_response}  # Yield the complete response
-    
     except requests.exceptions.RequestException as e:
         yield {"role": "assistant", "content": f"Error communicating with the Ollama API: {str(e)}"}
 
 # Function to generate follow-up question suggestions
 def generate_follow_up_suggestions(summary_state, model_name):
-    if not summary_state:
-        return ["No summary available. Please upload a PDF and generate a summary first."]
+    if not summary_state or len(summary_state.split()) < 50:  # Ensure summary has sufficient content
+        return ["Summary is too short to generate meaningful suggestions."]
     
     suggestion_prompt = (
-        f"Based on the following summary, suggest exactly three potential actions or questions a user might want to take next:\n\n{summary_state}\n\n"
+        f"Based on the following summary, suggest exactly three potential actions or questions a user might want to take next:\n"
+        f"{summary_state}\n"
         "Provide the suggestions as a numbered list in the following format:\n"
         "1. [Suggestion 1]\n"
         "2. [Suggestion 2]\n"
-        "3. [Suggestion 3]\n\n"
+        "3. [Suggestion 3]\n"
         "Do not include any additional explanations, introductions, or text before or after the numbered list."
     )
-    
     try:
         full_response = ""
         for chunk in query_ollama_model(suggestion_prompt, model_name, stream=False):
             full_response += chunk["content"]  # Accumulate the full response
+        
+        print(f"Raw model response: {full_response}")  # Debugging: Log the raw response
         
         # Split the response into individual questions
         questions = [q.strip() for q in full_response.split("\n") if q.strip().startswith(("1.", "2.", "3."))]
@@ -85,9 +83,9 @@ def generate_follow_up_suggestions(summary_state, model_name):
         # Validate the number of suggestions
         if len(questions) < 3:
             return ["No valid suggestions available."]  # Fallback if fewer than 3 suggestions are found
-        
         return questions
     except Exception as e:
+        print(f"Error generating suggestions: {str(e)}")  # Debugging: Log the error
         return ["Error: Unable to generate suggestions."]
 
 # Function to handle PDF upload, summarization, and prompt suggestions
@@ -99,7 +97,6 @@ def auto_summarize(file, model_name, summary_state):
     # Generate the summary
     summary_generator = summarize_paper(file, model_name, summary_state)
     summary, new_summary_state = None, None
-    
     for chunk, new_summary_state in summary_generator:
         summary = chunk
         yield summary, gr.update(choices=["Generating suggestions..."], interactive=False), new_summary_state  # Yield summary first
@@ -107,7 +104,11 @@ def auto_summarize(file, model_name, summary_state):
     # Generate prompt suggestions in parallel
     def generate_suggestions():
         nonlocal suggestions
-        suggestions.extend(generate_follow_up_suggestions(new_summary_state, model_name))
+        try:
+            suggestions.extend(generate_follow_up_suggestions(new_summary_state, model_name))
+        except Exception as e:
+            print(f"Error in suggestion generation thread: {str(e)}")  # Debugging: Log the error
+            suggestions.append("Error: Unable to generate suggestions.")
     
     suggestions = []
     thread = threading.Thread(target=generate_suggestions)  # Use threading.Thread
@@ -122,12 +123,10 @@ def summarize_paper(file, model_name, summary_state):
     if not file:
         yield [{"role": "assistant", "content": "Please upload a valid PDF file."}], summary_state
         return
-    
     try:
         # Extract text from the PDF
         with open(file.name, "rb") as pdf_file:
             extracted_text = extract_text_from_pdf(pdf_file)
-        
         if not extracted_text.strip():
             yield [{"role": "assistant", "content": "No text could be extracted from the uploaded PDF."}], summary_state
             return
@@ -145,7 +144,6 @@ def summarize_paper(file, model_name, summary_state):
             "Your goal is to create summaries that empower students by efficiently communicating complex information in an accessible, engaging, and easily reviewable format.\n"
             f"Summarize the following research paper:\n{extracted_text}"
         )
-        
         chat_history = []
         for chunk in query_ollama_model(predefined_prompt, model_name, stream=True):
             # Update the last message in the chat history with the cumulative response
@@ -153,10 +151,8 @@ def summarize_paper(file, model_name, summary_state):
                 chat_history[-1] = chunk  # Replace the last assistant message
             else:
                 chat_history.append(chunk)  # Add a new assistant message
-            
             # Yield the updated chat history
             yield chat_history, chunk["content"]
-    
     except Exception as e:
         yield [{"role": "assistant", "content": f"An error occurred: {str(e)}"}], summary_state
 
@@ -165,10 +161,8 @@ def handle_suggestion_selection(selected_question, model_name, chat_history, sum
     if not selected_question:
         yield chat_history, ""  # Return unchanged history and clear input
         return
-    
     # Add the selected question to the chat history
     chat_history.append({"role": "user", "content": selected_question})
-    
     # Query the model with the selected question and stream the response
     full_response = ""
     for chunk in query_ollama_model(selected_question, model_name, context=summary_state, stream=True):
@@ -178,7 +172,6 @@ def handle_suggestion_selection(selected_question, model_name, chat_history, sum
             chat_history[-1] = {"role": "assistant", "content": full_response}
         else:
             chat_history.append({"role": "assistant", "content": full_response})
-        
         yield chat_history, ""  # Clear the input field
 
 # Function to handle custom follow-up questions with streaming
@@ -186,10 +179,8 @@ def chat_wrapper(user_message, model_name, chat_history, summary_state):
     if not user_message.strip():
         yield chat_history, ""  # Return unchanged history and clear input
         return
-    
     # Add the user's question to the chat history
     chat_history.append({"role": "user", "content": user_message})
-    
     # Query the model with the follow-up question and summary as context
     full_response = ""
     for chunk in query_ollama_model(user_message, model_name, context=summary_state, stream=True):
@@ -199,7 +190,6 @@ def chat_wrapper(user_message, model_name, chat_history, summary_state):
             chat_history[-1] = {"role": "assistant", "content": full_response}
         else:
             chat_history.append({"role": "assistant", "content": full_response})
-        
         yield chat_history, ""  # Clear the input field
 
 # Create the Gradio interface
@@ -225,7 +215,6 @@ with gr.Blocks() as demo:
         
         # Dropdown for follow-up question suggestions
         follow_up_suggestions = gr.Dropdown(label="Suggested Follow-Up Questions", choices=[], interactive=False)
-        
         user_input = gr.Textbox(label="Your Question", placeholder="Type your follow-up question here...")
         submit_button = gr.Button("Ask")
         
