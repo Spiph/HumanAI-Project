@@ -38,6 +38,26 @@ def extract_text_from_pdf_with_ocr(file):
     except Exception as e:
         return f"Error extracting text from PDF using OCR: {str(e)}"
 
+# New function: retrieve_context
+def retrieve_context(query, summary_state):
+    """
+    A simple retrieval augmented guidance (RAG) function.
+    In a production system, this function could query a vector database
+    or another knowledge source to fetch documents related to the query.
+    Here, it scans the summary for sentences containing keywords from the query.
+    """
+    keywords = query.lower().split()
+    context_sentences = []
+    for sentence in summary_state.split('.'):
+        for keyword in keywords:
+            if keyword in sentence.lower():
+                context_sentences.append(sentence.strip())
+                break
+    retrieved = " ".join(context_sentences)
+    if not retrieved:
+        retrieved = "No additional context available."
+    return retrieved
+
 # Function to send a prompt to the Ollama model and retrieve the response
 def query_ollama_model(prompt, model_name="gemma3:1b", context=None, stream=True):
     messages = [
@@ -208,9 +228,12 @@ def handle_suggestion_selection(selected_question, model_name, chat_history, sum
         return
     # Add the selected question to the chat history
     chat_history.append({"role": "user", "content": selected_question})
-    # Query the model with the selected question and stream the response
+    # Retrieve additional context using RAG and augment the context
+    retrieved_context = retrieve_context(selected_question, summary_state)
+    augmented_context = summary_state + "\nAdditional Context:\n" + retrieved_context
+    # Query the model with the selected question and the augmented context
     full_response = ""
-    for chunk in query_ollama_model(selected_question, model_name, context=summary_state, stream=True):
+    for chunk in query_ollama_model(selected_question, model_name, context=augmented_context, stream=True):
         full_response = chunk["content"]
         # Update the last message in the chat history with the cumulative response
         if chat_history and chat_history[-1]["role"] == "assistant":
@@ -251,9 +274,12 @@ def chat_wrapper(user_message, model_name, chat_history, summary_state):
         return
     # Add the user's question to the chat history
     chat_history.append({"role": "user", "content": user_message})
-    # Query the model with the follow-up question and summary as context
+    # Retrieve additional context using RAG and augment the context
+    retrieved_context = retrieve_context(user_message, summary_state)
+    augmented_context = summary_state + "\nAdditional Context:\n" + retrieved_context
+    # Query the model with the follow-up question and the augmented context
     full_response = ""
-    for chunk in query_ollama_model(user_message, model_name, context=summary_state, stream=True):
+    for chunk in query_ollama_model(user_message, model_name, context=augmented_context, stream=True):
         full_response = chunk["content"]
         # Update the last message in the chat history with the cumulative response
         if chat_history and chat_history[-1]["role"] == "assistant":
