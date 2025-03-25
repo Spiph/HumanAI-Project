@@ -396,6 +396,17 @@ def warm_up_model(model_name="gemma3:1b"):
     except Exception as e:
         print(f"Error warming up the model: {str(e)}")
 
+def get_models() -> list:
+    OLLAMA_URL = "http://localhost:11434"
+    thelist = requests.get(OLLAMA_URL+"/api/tags")
+    jsondata = thelist.json()
+    result = list()
+
+    for model in jsondata["models"]:
+        result.append(model["model"])
+
+    return result
+
 # Create the Gradio interface
 with gr.Blocks() as demo:
     gr.Markdown("# Research Paper Assistant")
@@ -403,7 +414,7 @@ with gr.Blocks() as demo:
     # Dropdown for model selection
     model_dropdown = gr.Dropdown(
         label="Select Model",
-        choices=["gemma3:1b", "gemma3:4b"],  # Use gemma3:1b as the only model #TODO add more models to select
+        choices=get_models(),  # Use gemma3:1b as the only model #TODO add more models to select
         value="gemma3:1b"  # Default model
     )
     # State to store the summary
