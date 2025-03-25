@@ -377,7 +377,7 @@ with gr.Blocks() as demo:
     # Dropdown for model selection
     model_dropdown = gr.Dropdown(
         label="Select Model",
-        choices=["gemma3:1b"],  # Use gemma3:1b as the only model
+        choices=["gemma3:1b", "gemma3:4b"],  # Use gemma3:1b as the only model #TODO add more models to select
         value="gemma3:1b"  # Default model
     )
     # State to store the summary
@@ -425,4 +425,4 @@ with gr.Blocks() as demo:
 # Launch the Gradio app
 if __name__ == "__main__":
     warm_up_model()  # Warm up the model at startup
-    demo.launch(server_name="localhost", server_port=7860)
+    demo.launch(server_name="localhost", server_port=7860, share=True)

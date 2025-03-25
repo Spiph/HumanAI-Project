@@ -3,17 +3,16 @@ A teaching tool that provides prompts to a small LLM
 
 ## Installation
 
-* Install uv
-* `uv sync`
-* `source .venv/bin/activate`
-
-# Requirements:
+### Requirements:
 1. Ollama running on the local host with the specific model (here gemma3:1b)
 2. Gradio
 
-# Shortcuts: 
-1. Enter: To ask the follow-up question
-2. Shift+Enter: To enter into a new line
+### Install uv
+* `uv sync`
+* `source .venv/bin/activate`
+* `curl -fsSL https://ollama.com/install.sh | sh`
+
+
 
 # UI:
 1. Summarizes the paper by default
@@ -24,6 +23,10 @@ A teaching tool that provides prompts to a small LLM
 6. Gradio for the UI to create a public sharable link
 7. Live stream output
 8. Prompt Suggestions (3 prompts)
+
+# Shortcuts: 
+1. Enter: To ask the follow-up question
+2. Shift+Enter: To enter into a new line
 
 # To Do:
 1. Dynamic Prompt Suggestion updation
