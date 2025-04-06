@@ -10,6 +10,10 @@ import threading
 import os
 import datetime
 import uuid
+from sentence_transformers import SentenceTransformer
+import chromadb
+from chromadb.utils import embedding_functions
+import numpy as np
 
 # Define the Ollama API endpoint
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
@@ -17,6 +21,7 @@ OLLAMA_API_URL = "http://localhost:11434/api/chat"
 # Directory to store user data
 USER_DATA_DIR = "./user_data"
 os.makedirs(USER_DATA_DIR, exist_ok=True)
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Function to extract text from a PDF file using pdfplumber
 def extract_text_from_pdf(file):
@@ -577,6 +582,73 @@ def submit_mcq_answers(chatbot, summary_state, model_name, mcq_state, answer1, a
             name,  # User name
             email  # User email
         )
+
+# Create embeddings and build a ChromaDB collection
+def build_chroma_collection(text_chunks):
+    client = chromadb.Client()
+    embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+    collection = client.create_collection("paper_chunks", embedding_function=embedding_fn)
+    
+    ids = [str(i) for i in range(len(text_chunks))]
+    collection.add(documents=text_chunks, ids=ids)
+    return collection
+
+# Retrieve relevant chunks based on query
+def retrieve_relevant_chunks(query, collection, top_k=3):
+    results = collection.query(query_texts=[query], n_results=top_k)
+    retrieved_chunks = results['documents'][0]
+    return retrieved_chunks
+
+# Augment prompt with retrieved chunks to guide the LLM better
+def augmented_query(query, retrieved_chunks):
+    context = "\n---\n".join(retrieved_chunks)
+    augmented_prompt = f"Using the following context, answer the question:\n\n{context}\n\nQuestion: {query}"
+    return augmented_prompt
+
+def summarize_paper_with_rag(file, model_name, summary_state):
+    with open(file.name, "rb") as pdf_file:
+        extracted_text = extract_text_from_pdf_with_ocr(pdf_file)
+
+    # Split extracted text into chunks for embedding (you can improve chunking logic)
+    text_chunks = [extracted_text[i:i+500] for i in range(0, len(extracted_text), 500)]
+
+    # Build ChromaDB collection
+    collection = build_chroma_collection(text_chunks)
+
+    # Define your summarization query
+    predefined_prompt = (
+            "You are an educational summarization assistant designed to help students understand research papers. "
+            "When provided with academic text, create a summary in the form of an architectural diagram that shows "
+            "the complete research paper framework/process using blocks and arrows. "
+            "Follow these guidelines:\n"
+            "1. Identify the main components of the research (problem statement, methodology, results, etc.)\n"
+            "2. Represent each component as a block with a clear label\n"
+            "3. Use arrows to show the flow and relationships between components\n"
+            "4. Include brief descriptions for each block (1-2 sentences maximum)\n"
+            "5. Organize the diagram in a logical flow (typically top-to-bottom or left-to-right)\n"
+            "6. Start with the paper title and authors at the top\n\n"
+            "Format your response as a text-based diagram using ASCII characters for blocks and arrows. "
+            "Use [ ] for blocks, --> for arrows, and organize the layout clearly. "
+            "For example:\n\n"
+            "[Paper Title]\n"
+            "      |\n"
+            "      v\n"
+            "[Problem Statement] --> [Methodology] --> [Results]\n"
+            "                                            |\n"
+            "                                            v\n"
+            "                                       [Conclusion]\n\n"
+            f"Create this architectural diagram for the following research paper:\n{extracted_text}"
+        )
+
+    # Retrieve relevant chunks using RAG
+    relevant_chunks = retrieve_relevant_chunks(predefined_prompt, collection)
+
+    # Augment the query with retrieved chunks
+    augmented_prompt = augmented_query(predefined_prompt, relevant_chunks)
+
+    # Query the LLM with augmented context
+    for chunk in query_ollama_model(augmented_prompt, model_name, stream=True):
+        yield chunk
 
 # Function to handle user registration and start the session
 def register_user(name, email):
