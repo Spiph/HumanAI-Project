@@ -30,22 +30,22 @@ MAX_MCQ_GENERATION_ATTEMPTS = 5
 SECTION_HEADER_MAP = {
     "abstract": "abstract",
     "introduction": "introduction",
-    "related work": "related_work",
-    "background": "background",
-    "methodology": "methodology",
-    "methods": "methodology",
-    "approach": "methodology",
-    "implementation": "implementation",
+    "related work": "introduction",
+    "background": "introduction",
+    "methodology": "method",
+    "methods": "method",
+    "approach": "method",
+    "implementation": "method",
     "experiment setup": "experiments",
     "experimental setup": "experiments",
     "experimental design": "experiments",
     "experiments": "experiments",
     "evaluation": "experiments",
-    "data": "data",
+    "data": "results",
     "results": "results",
     "findings": "results",
     "analysis": "results",
-    "discussion": "discussion",
+    "discussion": "conclusion",
     "conclusion": "conclusion",
     "future work": "conclusion",
     "limitations": "conclusion",
@@ -258,13 +258,9 @@ def extract_section_information(parsed_data, model_name):
             "category": "Research Need",
             "prompt": "Extract 2-3 complete sentences that describe why this research is needed and what the authors want to do. Focus on the problem statement, research gap, and objectives."
         },
-        "methodology": {
+        "method": {
             "category": "Solution Approach",
             "prompt": "Extract 2-3 complete sentences that describe the solution or methodology proposed by the authors. Focus on the approach, techniques, and methods used."
-        },
-        "implementation": {
-            "category": "Solution Approach",
-            "prompt": "Extract 2-3 complete sentences that describe how the solution was implemented. Focus on the technical aspects, tools, and frameworks used."
         },
         "experiments": {
             "category": "Study Conduct",
@@ -278,10 +274,6 @@ def extract_section_information(parsed_data, model_name):
             "category": "Conclusion",
             "prompt": "Extract 2-3 complete sentences from the conclusion. Focus on the main takeaways, limitations, and future work."
         },
-        "limitations": {
-            "category": "Limitations",
-            "prompt": "Extract 2-3 complete sentences that describe the limitations of the study. Focus on constraints, shortcomings, and areas for improvement."
-        }
     }
     
     # Extract information from each available section
@@ -319,7 +311,7 @@ def extract_section_information(parsed_data, model_name):
     return extracted_info
 
 # Generate architectural diagram based on extracted section information
-def generate_architectural_diagram(extracted_info, model_name, stream=True):
+def generate_architectural_diagram(extracted_info, model_name, stream=True): #TODO change this to UI solution
     # Create a prompt that uses the extracted section information directly
     sections_text = ""
     for category, items in extracted_info.items():
