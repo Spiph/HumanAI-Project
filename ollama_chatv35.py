@@ -2,11 +2,6 @@ import gradio as gr
 import requests
 import json
 import pdfplumber
-from pdf2image import convert_from_path
-import pytesseract
-from PIL import Image
-from io import BytesIO
-import threading
 import os
 import datetime
 import uuid
