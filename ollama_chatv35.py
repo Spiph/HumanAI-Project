@@ -30,8 +30,8 @@ MAX_MCQ_GENERATION_ATTEMPTS = 5
 SECTION_HEADER_MAP = {
     "abstract": "abstract",
     "introduction": "introduction",
-    "related work": "introduction",
-    "background": "introduction",
+    "related work": "related_work",
+    "background": "related_work",
     "methodology": "method",
     "methods": "method",
     "approach": "method",
@@ -41,7 +41,7 @@ SECTION_HEADER_MAP = {
     "experimental design": "experiments",
     "experiments": "experiments",
     "evaluation": "experiments",
-    "data": "results",
+    "data": "data",
     "results": "results",
     "findings": "results",
     "analysis": "results",
@@ -262,6 +262,10 @@ def extract_section_information(parsed_data, model_name):
             "category": "Solution Approach",
             "prompt": "Extract 2-3 complete sentences that describe the solution or methodology proposed by the authors. Focus on the approach, techniques, and methods used."
         },
+        "implementation": {
+            "category": "Solution Approach",
+            "prompt": "Extract 2-3 complete sentences that describe how the solution was implemented. Focus on the technical aspects, tools, and frameworks used."
+        },
         "experiments": {
             "category": "Study Conduct",
             "prompt": "Extract 2-3 complete sentences that describe how the study was conducted. Focus on the experimental setup, datasets, and evaluation metrics."
@@ -274,6 +278,10 @@ def extract_section_information(parsed_data, model_name):
             "category": "Conclusion",
             "prompt": "Extract 2-3 complete sentences from the conclusion. Focus on the main takeaways, limitations, and future work."
         },
+        "limitations": {
+            "category": "Limitations",
+            "prompt": "Extract 2-3 complete sentences that describe the limitations of the study. Focus on constraints, shortcomings, and areas for improvement."
+        }
     }
     
     # Extract information from each available section
@@ -311,7 +319,7 @@ def extract_section_information(parsed_data, model_name):
     return extracted_info
 
 # Generate architectural diagram based on extracted section information
-def generate_architectural_diagram(extracted_info, model_name, stream=True): #TODO change this to UI solution
+def generate_architectural_diagram(extracted_info, model_name, stream=True):
     # Create a prompt that uses the extracted section information directly
     sections_text = ""
     for category, items in extracted_info.items():
@@ -319,19 +327,22 @@ def generate_architectural_diagram(extracted_info, model_name, stream=True): #TO
         for item in items:
             sections_text += f"- From {item['section']}: {item['content']}\n"
     
+    # Updated prompt with specific instructions for centered rectangular blocks without arrows
     diagram_prompt = (
         "You are an educational visualization specialist. Based on the following extracted information from different "
         "sections of a research paper, create a comprehensive architectural diagram that visually represents the "
-        "paper's framework using blocks and arrows.\n\n"
+        "paper's framework using rectangular blocks.\n\n"
         f"Extracted information from paper sections:\n{sections_text}\n\n"
         "Follow these guidelines for creating the architectural diagram:\n"
         "1. Create a clear, hierarchical structure showing the flow of the research\n"
-        "2. Use blocks (represented as [ ]) for each major component\n"
-        "3. Use arrows (-->, |, v) to show relationships and flow between components\n"
-        "4. Include the exact sentences from the extracted information inside each block\n"
-        "5. Organize in a logical flow (top-to-bottom or left-to-right)\n"
-        "6. Include all relevant components from the extracted information\n\n"
-        "Format your response as a text-based diagram using ASCII characters for blocks and arrows. "
+        "2. Use rectangular blocks with '+' for corners, '-' for horizontal borders, and '|' for vertical borders\n"
+        "3. Make each block wide enough to accommodate the full content (not limited to a fixed width)\n"
+        "4. Center the title of each block\n"
+        "5. Include bullet points (•) for content inside each block\n"
+        "6. Arrange blocks vertically with NO arrows or connecting symbols between them\n"
+        "7. Center-align the entire diagram\n"
+        "8. Ensure the diagram is readable in both light and dark modes\n\n"
+        "Format your response as a text-based diagram using ASCII characters for blocks. "
         "Make sure the diagram is well-structured, easy to read, and captures the complete research framework."
     )
     
@@ -1018,6 +1029,7 @@ def generate_explanation_diagram(extracted_explanation_info, model_name, mcq_ind
         questions_info += f"- {evidence}\n"
     questions_info += f"KEY CONCEPT: {q_info['key_concept']}\n"
     
+    # Updated prompt with specific instructions for centered rectangular blocks without arrows
     diagram_prompt = (
         "You are an educational visualization specialist. Based on the following extracted explanation "
         "information, create a comprehensive architectural diagram that visually explains why the correct "
@@ -1025,12 +1037,14 @@ def generate_explanation_diagram(extracted_explanation_info, model_name, mcq_ind
         f"Extracted explanation information:\n{questions_info}\n\n"
         "Follow these guidelines for creating the explanation diagram:\n"
         "1. Create a clear, hierarchical structure showing the concepts that explain the correct answer\n"
-        "2. Use blocks (represented as [ ]) for each major concept or evidence\n"
-        "3. Use arrows (-->, |, v) to show relationships between concepts and how they support the correct answer\n"
-        "4. Include the exact evidence sentences inside blocks\n"
-        "5. Organize in a logical flow (top-to-bottom or left-to-right)\n"
-        "6. Create a focused diagram that clearly leads to the correct answer\n\n"
-        "Format your response as a text-based diagram using ASCII characters for blocks and arrows. "
+        "2. Use rectangular blocks with '+' for corners, '-' for horizontal borders, and '|' for vertical borders\n"
+        "3. Make each block wide enough to accommodate the full content (not limited to a fixed width)\n"
+        "4. Center the title of each block\n"
+        "5. Include bullet points (•) for content inside each block\n"
+        "6. Arrange blocks vertically with NO arrows or connecting symbols between them\n"
+        "7. Center-align the entire diagram\n"
+        "8. Ensure the diagram is readable in both light and dark modes\n\n"
+        "Format your response as a text-based diagram using ASCII characters for blocks. "
         "Make sure the diagram is well-structured, easy to read, and provides clear educational value."
     )
     
@@ -1051,13 +1065,7 @@ def generate_explanation_diagram(extracted_explanation_info, model_name, mcq_ind
             "+---------------------+\n"
             "| Question            |\n"
             "+---------------------+\n"
-            "          |\n"
-            "          v\n"
-            "+---------------------+\n"
             "| Supporting Evidence |\n"
-            "+---------------------+\n"
-            "          |\n"
-            "          v\n"
             "+---------------------+\n"
             "| Correct Answer      |\n"
             "+---------------------+\n"
@@ -1557,62 +1565,107 @@ def warm_up_model(model_name="gemma3:1b"):
     except Exception as e:
         print(f"Error warming up the model: {str(e)}")
 
+# Custom CSS for improved visual appearance and dark mode compatibility
+CUSTOM_CSS = """
+/* Enhanced CSS for strict vertical layout of radio options */
+.options-radio label {
+    display: block !important;
+    margin-bottom: 10px !important;
+    width: 100% !important;
+    clear: both !important;
+    float: none !important;
+}
+
+/* Force each radio option to be on its own line */
+.options-radio .gr-radio-row {
+    display: block !important;
+    margin-bottom: 8px !important;
+}
+
+/* Ensure radio buttons are properly aligned */
+.options-radio input[type='radio'] {
+    margin-right: 10px !important;
+    vertical-align: middle !important;
+}
+
+/* Additional styling to prevent horizontal layout */
+.options-radio .gr-form {
+    display: block !important;
+}
+
+/* Prevent any flex or grid layout that might cause horizontal alignment */
+.options-radio > div {
+    display: block !important;
+    flex-direction: column !important;
+}
+
+/* Home container styling */
+.home-container {
+    text-align: center;
+    padding: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* Feature list styling */
+.feature-list {
+    text-align: left;
+    margin: 20px auto;
+    max-width: 600px;
+}
+
+/* Diagram container with dark mode compatibility */
+.diagram-container {
+    font-family: monospace;
+    white-space: pre;
+    overflow-x: auto;
+    padding: 15px;
+    border-radius: 5px;
+    text-align: center;
+    margin: 10px auto;
+    max-width: 100%;
+    display: inline-block;
+}
+
+/* Dark mode compatibility for diagrams */
+.dark .diagram-container {
+    background-color: #2a2a2a !important;
+    color: #ffffff !important;
+}
+
+/* Light mode styling for diagrams */
+.light .diagram-container {
+    background-color: #f8f9fa !important;
+    color: #000000 !important;
+}
+
+/* Center-align all pre elements (used for diagrams) */
+pre {
+    text-align: center !important;
+    margin: 0 auto !important;
+    display: inline-block !important;
+    white-space: pre !important;
+}
+
+/* Ensure chatbot messages are visible in both light and dark modes */
+.dark .message-bubble {
+    color: #ffffff !important;
+}
+
+.light .message-bubble {
+    color: #000000 !important;
+}
+
+/* Ensure diagrams are properly centered */
+.message-bubble pre {
+    display: block !important;
+    margin: 0 auto !important;
+    text-align: center !important;
+}
+"""
+
 # Create the Gradio interface
-with gr.Blocks(css="""
-    /* Enhanced CSS for strict vertical layout of radio options */
-    .options-radio label {
-        display: block !important;
-        margin-bottom: 10px !important;
-        width: 100% !important;
-        clear: both !important;
-        float: none !important;
-    }
-    
-    /* Force each radio option to be on its own line */
-    .options-radio .gr-radio-row {
-        display: block !important;
-        margin-bottom: 8px !important;
-    }
-    
-    /* Ensure radio buttons are properly aligned */
-    .options-radio input[type='radio'] {
-        margin-right: 10px !important;
-        vertical-align: middle !important;
-    }
-    
-    /* Additional styling to prevent horizontal layout */
-    .options-radio .gr-form {
-        display: block !important;
-    }
-    
-    /* Prevent any flex or grid layout that might cause horizontal alignment */
-    .options-radio > div {
-        display: block !important;
-        flex-direction: column !important;
-    }
-    
-    .home-container {
-        text-align: center;
-        padding: 20px;
-        max-width: 800px;
-        margin: 0 auto;
-    }
-    
-    .feature-list {
-        text-align: left;
-        margin: 20px auto;
-        max-width: 600px;
-    }
-    
-    .diagram-container {
-        font-family: monospace;
-        white-space: pre;
-        overflow-x: auto;
-        background-color: #f8f9fa;
-        padding: 10px;
-        border-radius: 5px;
-    }
-""") as demo:
+with gr.Blocks(css=CUSTOM_CSS) as demo:
     # User session states
     user_id_state = gr.State("")
     user_name_state = gr.State("")
