@@ -18,7 +18,7 @@ from collections import defaultdict, OrderedDict
 from pdf_parser import extract_text_from_pdf_with_sections
 from ollama_api import query_ollama_model
 from section_extractor import extract_section_information
-from diagram_generator_fixed import generate_architectural_diagram, generate_explanation_diagram
+from diagram_generator_enhanced import generate_architectural_diagram, generate_explanation_diagram
 from mcq_generator import (
     generate_mcqs, generate_single_mcq, generate_multiple_mcqs, 
     create_default_mcq, extract_explanation_information
