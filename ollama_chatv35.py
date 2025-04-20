@@ -30,8 +30,9 @@ MAX_MCQ_GENERATION_ATTEMPTS = 5
 SECTION_HEADER_MAP = {
     "abstract": "abstract",
     "introduction": "introduction",
-    "related work": "related_work",
-    "background": "related_work",
+    "related work": "introduction",
+    "background": "introduction",
+    "preliminaries": "introduction",
     "methodology": "method",
     "methods": "method",
     "approach": "method",
