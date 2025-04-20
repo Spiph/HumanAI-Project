@@ -2,7 +2,7 @@
 Diagram Generator Module with Enhanced Fallback
 
 This module contains the architectural diagram generation functionality from the original ollama_chatv35.py file,
-with an added fallback mechanism for empty or malformed explanation diagrams.
+with an added fallback mechanism for empty or malformed explanation diagrams that maintains the exact same format.
 """
 
 import re
@@ -181,19 +181,19 @@ def generate_explanation_diagram(extracted_explanation_info, model_name, mcq_ind
 def generate_fallback_explanation(q_info, model_name):
     """
     Generate a fallback explanation when the diagram generation fails or produces malformed output.
+    The fallback maintains the exact same format as the original explanation diagrams.
     
     Args:
         q_info: Dictionary containing question information
         model_name: The name of the model to use
         
     Returns:
-        str: A fallback explanation in text format
+        str: A fallback explanation in the same format as regular explanation diagrams
     """
-    # Create a prompt for a text-based explanation instead of a diagram
+    # Create a prompt for generating a diagram-formatted explanation
     fallback_prompt = (
-        "Based on the following question and evidence, provide a clear textual explanation "
-        "of why the correct answer is correct. Format your response as a simple, readable explanation "
-        "without attempting to create an ASCII diagram.\n\n"
+        "You are an educational visualization specialist. Based on the following question and evidence, "
+        "create a comprehensive architectural diagram that visually explains why the correct answer is correct.\n\n"
         f"QUESTION: {q_info['question_text']}\n\n"
         "SUPPORTING EVIDENCE:\n"
     )
@@ -202,49 +202,119 @@ def generate_fallback_explanation(q_info, model_name):
         fallback_prompt += f"- {evidence}\n"
     
     fallback_prompt += f"\nKEY CONCEPT: {q_info['key_concept']}\n\n"
-    fallback_prompt += "Your explanation should be clear, concise, and educational."
+    fallback_prompt += (
+        "Follow these guidelines for creating the explanation diagram:\n"
+        "1. Create a clear, hierarchical structure with these EXACT blocks in this order:\n"
+        "   - 'QUESTION ANALYSIS' block at the top\n"
+        "   - 'KEY CONCEPTS' block in the middle\n" 
+        "   - 'CORRECT ANSWER EXPLANATION' block at the bottom\n"
+        "2. Use rectangular blocks with '+' for corners, '-' for horizontal borders, and '|' for vertical borders\n"
+        "3. Make each block wide enough to accommodate the full content (at least 60 characters wide)\n"
+        "4. Center the title of each block\n"
+        "5. Include bullet points (•) for content inside each block\n"
+        "6. Arrange blocks vertically with NO arrows or connecting symbols between them\n"
+        "7. Center-align the entire diagram\n"
+        "8. Ensure the diagram is readable in both light and dark modes\n\n"
+        "IMPORTANT: You MUST follow the exact format specified above with the three named blocks. "
+        "Do NOT include any text saying this is a fallback or alternative explanation."
+    )
     
     try:
-        # Generate a text-based explanation
+        # Generate a diagram-formatted explanation
         explanation = ""
         for chunk in query_ollama_model(fallback_prompt, model_name, stream=False):
             explanation = chunk["content"]
         
-        # Format the explanation as a simple box
-        formatted_explanation = (
-            "FALLBACK EXPLANATION (Diagram generation failed):\n\n"
-            "+--------------------------------------------------------------+\n"
-            "| EXPLANATION FOR CORRECT ANSWER                               |\n"
-            "+--------------------------------------------------------------+\n"
-            "|\n"
-        )
+        # If the generated content still doesn't look like a diagram, create a standard one
+        if is_empty_or_malformed_diagram(explanation):
+            # Create a standard diagram format that matches the original style
+            width = 70
+            
+            # Format the question for display (wrap long lines)
+            question_lines = []
+            words = q_info['question_text'].split()
+            current_line = "• "
+            for word in words:
+                if len(current_line + word) > width - 4:  # -4 for margins
+                    question_lines.append(current_line)
+                    current_line = "  " + word
+                else:
+                    current_line += " " + word if current_line != "• " else word
+            if current_line:
+                question_lines.append(current_line)
+            
+            # Format the evidence points
+            evidence_lines = []
+            for evidence in q_info['evidence']:
+                evidence_lines.append(f"• {evidence}")
+            
+            # Create the diagram
+            diagram = []
+            
+            # Add the QUESTION ANALYSIS block
+            title = "QUESTION ANALYSIS"
+            diagram.append("+" + "-" * (width - 2) + "+")
+            diagram.append("|" + title.center(width - 2) + "|")
+            diagram.append("+" + "-" * (width - 2) + "+")
+            for line in question_lines:
+                diagram.append("| " + line.ljust(width - 4) + " |")
+            diagram.append("+" + "-" * (width - 2) + "+")
+            diagram.append("")  # Empty line between blocks
+            
+            # Add the KEY CONCEPTS block
+            title = "KEY CONCEPTS"
+            diagram.append("+" + "-" * (width - 2) + "+")
+            diagram.append("|" + title.center(width - 2) + "|")
+            diagram.append("+" + "-" * (width - 2) + "+")
+            diagram.append("| • " + q_info['key_concept'].ljust(width - 5) + " |")
+            diagram.append("+" + "-" * (width - 2) + "+")
+            diagram.append("")  # Empty line between blocks
+            
+            # Add the CORRECT ANSWER EXPLANATION block
+            title = "CORRECT ANSWER EXPLANATION"
+            diagram.append("+" + "-" * (width - 2) + "+")
+            diagram.append("|" + title.center(width - 2) + "|")
+            diagram.append("+" + "-" * (width - 2) + "+")
+            for line in evidence_lines:
+                diagram.append("| " + line.ljust(width - 4) + " |")
+            diagram.append("+" + "-" * (width - 2) + "+")
+            
+            return "\n".join(diagram)
         
-        # Add each line of the explanation to the box
-        for line in explanation.split('\n'):
-            formatted_explanation += f"| {line}\n"
-        
-        formatted_explanation += "|\n+--------------------------------------------------------------+\n"
-        
-        return formatted_explanation
+        return explanation
         
     except Exception as e:
         print(f"Error generating fallback explanation: {str(e)}")
         
-        # Create a very simple fallback if everything else fails
-        simple_fallback = (
-            "Unable to generate a detailed explanation. Here's a basic explanation:\n\n"
-            "+--------------------------------------------------------------+\n"
-            "| QUESTION:                                                    |\n"
-            f"| {q_info['question_text']}\n"
-            "+--------------------------------------------------------------+\n"
-            "| EVIDENCE:                                                    |\n"
-        )
+        # Create a standard diagram as a last resort
+        width = 70
+        diagram = []
         
+        # Add the QUESTION ANALYSIS block
+        title = "QUESTION ANALYSIS"
+        diagram.append("+" + "-" * (width - 2) + "+")
+        diagram.append("|" + title.center(width - 2) + "|")
+        diagram.append("+" + "-" * (width - 2) + "+")
+        diagram.append("| • " + q_info['question_text'].ljust(width - 5) + " |")
+        diagram.append("+" + "-" * (width - 2) + "+")
+        diagram.append("")  # Empty line between blocks
+        
+        # Add the KEY CONCEPTS block
+        title = "KEY CONCEPTS"
+        diagram.append("+" + "-" * (width - 2) + "+")
+        diagram.append("|" + title.center(width - 2) + "|")
+        diagram.append("+" + "-" * (width - 2) + "+")
+        diagram.append("| • " + q_info['key_concept'].ljust(width - 5) + " |")
+        diagram.append("+" + "-" * (width - 2) + "+")
+        diagram.append("")  # Empty line between blocks
+        
+        # Add the CORRECT ANSWER EXPLANATION block
+        title = "CORRECT ANSWER EXPLANATION"
+        diagram.append("+" + "-" * (width - 2) + "+")
+        diagram.append("|" + title.center(width - 2) + "|")
+        diagram.append("+" + "-" * (width - 2) + "+")
         for evidence in q_info['evidence']:
-            simple_fallback += f"| - {evidence}\n"
+            diagram.append("| • " + evidence.ljust(width - 5) + " |")
+        diagram.append("+" + "-" * (width - 2) + "+")
         
-        simple_fallback += "+--------------------------------------------------------------+\n"
-        simple_fallback += f"| KEY CONCEPT: {q_info['key_concept']}\n"
-        simple_fallback += "+--------------------------------------------------------------+\n"
-        
-        return simple_fallback
+        return "\n".join(diagram)
