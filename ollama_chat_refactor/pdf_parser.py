@@ -136,7 +136,18 @@ SECTION_HEADER_MAP = {
 # Header regex pattern
 HEADER_REGEX = r"(?im)^\s*(?:\d+(?:\.\d+)*[.)]?\s*)?(?P<header>" + "|".join(re.escape(h) for h in SECTION_HEADER_MAP.keys()) + r")\s*$"
 
-def detect_two_column_page_combined(page, threshold=0.95):
+def detect_two_column_page_combined(page, threshold=0.95, white_ratio_threshold=0.65):
+    """
+    Detect if a page has a two-column layout using a combined approach.
+    
+    Args:
+        page: The page to analyze
+        threshold: Threshold for white pixel detection (default: 0.95)
+        white_ratio_threshold: Threshold for white ratio in center (default: 0.65, lowered from 0.7)
+        
+    Returns:
+        bool: True if the page has a two-column layout, False otherwise
+    """
     im = page.to_image(resolution=150).original.convert("L")
     arr = np.array(im)
     height, width = arr.shape
@@ -164,7 +175,7 @@ def detect_two_column_page_combined(page, threshold=0.95):
     total = len(labels)
     balanced_clusters = (cluster_0 / total > 0.2 and cluster_1 / total > 0.2)
 
-    return white_ratio > 0.7 and cluster_distance > 150 and balanced_clusters
+    return white_ratio > white_ratio_threshold and cluster_distance > 150 and balanced_clusters
 
 def detect_document_layout(pdf):
     page_limit = min(3, len(pdf.pages))
