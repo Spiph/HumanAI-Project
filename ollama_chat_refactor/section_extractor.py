@@ -21,35 +21,62 @@ def extract_section_information(parsed_data, model_name):
     # Define the sections we want to extract information from
     section_info = {
         "introduction": {
-            "category": "Research Need",
-            "prompt": "Extract 2-3 complete sentences that describe why this research is needed and what the authors want to do. Focus on the problem statement, research gap, and objectives."
+            "category": "Introduction",
+            "prompt": """
+    You will be given the Introduction section of an academic paper.
+    First, compose a concise narrative summary of the section.
+    Next, distill that summary into a bulleted list highlighting:
+    - Background & Motivation: the context, problem statement, and why this work matters
+    - Related Work: the main prior approaches, their strengths, and remaining gaps
+    - Preliminaries: essential definitions, notation, and key assumptions
+    """
         },
         "method": {
-            "category": "Solution Approach",
-            "prompt": "Extract 2-3 complete sentences that describe the solution or methodology proposed by the authors. Focus on the approach, techniques, and methods used."
-        },
-        "implementation": {
-            "category": "Solution Approach",
-            "prompt": "Extract 2-3 complete sentences that describe how the solution was implemented. Focus on the technical aspects, tools, and frameworks used."
+            "category": "Method",
+            "prompt": """
+    You will be given the Method section.
+    First, write a clear, cohesive summary of the authors’ methodology.
+    Then, present a bulleted list of the core elements:
+    - Overall approach or framework
+    - Principal techniques or algorithms employed
+    - Noteworthy implementation or architectural details
+    """
         },
         "experiments": {
-            "category": "Study Conduct",
-            "prompt": "Extract 2-3 complete sentences that describe how the study was conducted. Focus on the experimental setup, datasets, and evaluation metrics."
+            "category": "Experiments",
+            "prompt": """
+    You will be given the Experiments section.
+    Begin with a succinct summary of how the study was conducted.
+    Then, provide a bulleted list covering:
+    - Experimental setup and design
+    - Datasets used and how they were partitioned
+    - Evaluation metrics and procedures
+    """
         },
         "results": {
             "category": "Results",
-            "prompt": "Extract 2-3 complete sentences that describe the results of the study. Focus on the main findings, performance metrics, and comparisons."
+            "prompt": """
+    You will be given the Results section.
+    Start with a brief narrative summary of the main findings.
+    Then, enumerate the key outcomes in bullet form:
+    - Key performance metrics or quantitative outcomes
+    - Comparisons to baselines or benchmarks
+    - Any statistical significance or notable trends
+    """
         },
         "conclusion": {
-            "category": "Conclusion",
-            "prompt": "Extract 2-3 complete sentences from the conclusion. Focus on the main takeaways, limitations, and future work."
+            "category": "Conclusion and Limitations",
+            "prompt": """
+    You will be given the Conclusion section.
+    First, craft a concise summary of the authors’ final insights.
+    Then, distill it into bullets that cover:
+    - The primary conclusions drawn
+    - Declared limitations of the study
+    - Suggested directions for future work
+    """
         },
-        "limitations": {
-            "category": "Limitations",
-            "prompt": "Extract 2-3 complete sentences that describe the limitations of the study. Focus on constraints, shortcomings, and areas for improvement."
-        }
     }
-    
+
     # Extract information from each available section
     extracted_info = {}
     

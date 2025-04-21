@@ -43,27 +43,23 @@ def summarize_paper(file, model_name, summary_state):
             yield [("", "No text could be extracted from the uploaded PDF.")], summary_state
             return
         
-        # Step 1: Extract section-specific information
-        # Use proper tuple format for chatbot messages
+        # Step 1: Extract section-specific information once
         chat_history = [("", "Analyzing the paper to extract key details from each section...")]
-        yield chat_history, ""
-        
+        yield chat_history, ""                       # still show “working” state
+
         # Extract information from each section
         extracted_info = extract_section_information(parsed_data, model_name)
-        
-        # Store extracted information in summary_state for later use
-        paper_details_state = extracted_info
-        
+
         # Update chat history to indicate completion of extraction
         chat_history = [("", "Key details extracted from all sections. Generating architectural diagram...")]
-        yield chat_history, paper_details_state
+        yield chat_history, extracted_info
         
         # Step 2: Generate architectural diagram based on extracted section information
         for chunk in generate_architectural_diagram(extracted_info, model_name, stream=True):
             if "content" in chunk:
                 # Replace the last assistant message with proper tuple format
                 chat_history = [("", chunk["content"])]
-                yield chat_history, paper_details_state
+                yield chat_history, extracted_info
     except Exception as e:
         yield [("", f"An error occurred: {str(e)}")], summary_state
 

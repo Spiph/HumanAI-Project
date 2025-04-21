@@ -5,13 +5,18 @@ A teaching tool that provides prompts to a small LLM
 
 ### Requirements:
 1. Ollama running on the local host with the specific model (here gemma3:1b)
+* `curl -fsSL https://ollama.com/install.sh | sh`
 2. Gradio
+3. UV
 
-### Install uv
+## Running
+
+### Activate UV Environment
 * `uv sync`
 * `source .venv/bin/activate`
-* `curl -fsSL https://ollama.com/install.sh | sh`
 
+### Run the App
+* `uv run python app.py`
 
 
 # UI:

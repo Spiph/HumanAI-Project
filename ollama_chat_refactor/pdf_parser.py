@@ -12,33 +12,126 @@ import numpy as np
 from collections import defaultdict, OrderedDict
 from sklearn.cluster import KMeans
 
-# Section header mapping
 SECTION_HEADER_MAP = {
+    # Abstract
     "abstract": "abstract",
+    "executive summary": "abstract",
+    "summary": "abstract",
+
+    # Introduction
     "introduction": "introduction",
-    "related work": "related_work",
-    "background": "related_work",
+    "related work": "introduction",
+    "background": "introduction",
+    "preliminaries": "introduction",
+    "problem statement": "introduction",
+    "motivation": "introduction",
+    "paper organization": "introduction",
+    "outline": "introduction",
+    "contributions": "introduction",
+
+    # Methods
     "methodology": "method",
     "methods": "method",
     "approach": "method",
+    "materials and methods": "method",
+    "method and materials": "method",
+    "design and implementation": "method",
     "implementation": "method",
+    "implementation details": "method",
+    "model": "method",
+    "model architecture": "method",
+    "system architecture": "method",
+    "algorithm": "method",
+    "algorithms": "method",
+    "nomenclature": "method",
+    "notation": "method",
+
+    # Data
+    "data": "data",
+    "datasets": "data",
+    "dataset": "data",
+    "data collection": "data",
+    "data sources": "data",
+    "data description": "data",
+    "corpus": "data",
+    "corpora": "data",
+
+    # Experiments / Evaluation
     "experiment setup": "experiments",
     "experimental setup": "experiments",
     "experimental design": "experiments",
     "experiments": "experiments",
     "evaluation": "experiments",
-    "data": "data",
+    "evaluation methodology": "experiments",
+    "evaluation metrics": "experiments",
+    "benchmarks": "experiments",
+    "benchmark": "experiments",
+    "performance evaluation": "experiments",
+    "experimental results": "experiments",
+    "testbed": "experiments",
+    "ablation study": "experiments",
+    "ablation studies": "experiments",
+    "case study": "experiments",
+    "case studies": "experiments",
+    "setup": "experiments",
+
+    # Results & Analysis
     "results": "results",
     "findings": "results",
     "analysis": "results",
+    "results and discussion": "results",
+    "analysis and results": "results",
+    "findings and discussion": "results",
+    "outcomes": "results",
+    "observations": "results",
+
+    # Discussion & Conclusion
     "discussion": "conclusion",
+    "concluding discussion": "conclusion",
     "conclusion": "conclusion",
+    "conclusions and future work": "conclusion",
     "future work": "conclusion",
+    "summary and future work": "conclusion",
+    "summary and outlook": "conclusion",
+    "concluding remarks": "conclusion",
+    "takeaways": "conclusion",
     "limitations": "conclusion",
+
+    # Back‐matter
     "references": "references",
+    "bibliography": "references",
+    "literature cited": "references",
+    "citations": "references",
+
+    # Acknowledgments & Declarations
     "acknowledgments": "acknowledgments",
-    "acknowledgements": "acknowledgments"
+    "acknowledgements": "acknowledgments",
+    "funding": "acknowledgments",
+    "author contributions": "acknowledgments",
+    "conflicts of interest": "acknowledgments",
+    "conflict of interest": "acknowledgments",
+    "competing interests": "acknowledgments",
+
+    # Declarations (often separate in some venues)
+    "declarations": "declarations",
+    "ethics statement": "declarations",
+    "ethics approval": "declarations",
+    "data availability": "declarations",
+    "code availability": "declarations",
+
+    # Supplementary / Appendix
+    "appendix": "appendix",
+    "appendices": "appendix",
+    "supplementary material": "appendix",
+    "supplementary materials": "appendix",
+    "supplemental": "appendix",
+    "supplemental materials": "appendix",
+
+    # Keywords / Front Matter
+    "keywords": "keywords",
+    "index terms": "keywords",
 }
+
 
 # Header regex pattern
 HEADER_REGEX = r"(?im)^\s*(?:\d+(?:\.\d+)*[.)]?\s*)?(?P<header>" + "|".join(re.escape(h) for h in SECTION_HEADER_MAP.keys()) + r")\s*$"
