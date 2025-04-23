@@ -21,62 +21,27 @@ def extract_section_information(parsed_data, model_name):
     # Define the sections we want to extract information from
     section_info = {
         "introduction": {
-            "category": "Introduction",
-            "prompt": """
-    You will be given the Introduction section of an academic paper.
-    First, compose a concise narrative summary of the section.
-    Next, distill that summary into a bulleted list highlighting:
-    - Background & Motivation: the context, problem statement, and why this work matters
-    - Related Work: the main prior approaches, their strengths, and remaining gaps
-    - Preliminaries: essential definitions, notation, and key assumptions
-    """
+            "category": "Research Need",
+            "prompt": "Extract 2-3 complete sentences that describe why this research is needed and what the authors want to do. Focus on - Background & Motivation: the context, problem statement, and why this work matters - Related Work: the main prior approaches, their strengths, and remaining gaps - Preliminaries: essential definitions, notation, and key assumptions"
         },
         "method": {
-            "category": "Method",
-            "prompt": """
-    You will be given the Method section.
-    First, write a clear, cohesive summary of the authors’ methodology.
-    Then, present a bulleted list of the core elements:
-    - Overall approach or framework
-    - Principal techniques or algorithms employed
-    - Noteworthy implementation or architectural details
-    """
+            "category": "Solution Approach",
+            "prompt": "Extract 2-3 complete sentences that describe the solution or methodology proposed by the authors. Focus on - Overall approach or framework - Principal techniques or algorithms employed - Noteworthy implementation or architectural details"
         },
         "experiments": {
-            "category": "Experiments",
-            "prompt": """
-    You will be given the Experiments section.
-    Begin with a succinct summary of how the study was conducted.
-    Then, provide a bulleted list covering:
-    - Experimental setup and design
-    - Datasets used and how they were partitioned
-    - Evaluation metrics and procedures
-    """
+            "category": "Study Conduct",
+            "prompt": "Extract 2-3 complete sentences that describe how the study was conducted. Focus on - Experimental setup and design - Datasets used and how they were partitioned - Evaluation metrics and procedures"
         },
         "results": {
             "category": "Results",
-            "prompt": """
-    You will be given the Results section.
-    Start with a brief narrative summary of the main findings.
-    Then, enumerate the key outcomes in bullet form:
-    - Key performance metrics or quantitative outcomes
-    - Comparisons to baselines or benchmarks
-    - Any statistical significance or notable trends
-    """
+            "prompt": "Extract 2-3 complete sentences that describe the results of the study. Focus on - Key performance metrics or quantitative outcomes - Comparisons to baselines or benchmarks - Any statistical significance or notable trends"
         },
         "conclusion": {
-            "category": "Conclusion and Limitations",
-            "prompt": """
-    You will be given the Conclusion section.
-    First, craft a concise summary of the authors’ final insights.
-    Then, distill it into bullets that cover:
-    - The primary conclusions drawn
-    - Declared limitations of the study
-    - Suggested directions for future work
-    """
+            "category": "Conclusion",
+            "prompt": "Extract 2-3 complete sentences from the conclusion. Focus on - The primary conclusions drawn - Declared limitations of the study - Suggested directions for future work"
         },
     }
-
+    
     # Extract information from each available section
     extracted_info = {}
     
@@ -99,8 +64,10 @@ def extract_section_information(parsed_data, model_name):
                 # Use streaming for all extractions to improve responsiveness
                 full_response = ""
                 for chunk in query_ollama_model(extraction_prompt, model_name, stream=True):
-                    full_response = chunk["content"]
+                    raw_response = chunk["content"]
                 
+                full_response = raw_response.split(":", 1)[-1].lstrip() if ":" in raw_response else raw_response
+
                 # Store the extracted information
                 if category not in extracted_info:
                     extracted_info[category] = []
