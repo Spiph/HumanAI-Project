@@ -13,20 +13,79 @@ import json
 import threading
 import random
 from collections import defaultdict, OrderedDict
+import base64, zlib
+
 
 # Import from our modules
-from pdf_parser import extract_text_from_pdf_with_sections
+from pdf_parser_fix import extract_text_from_pdf_with_sections
 from ollama_api import query_ollama_model
 from section_extractor import extract_section_information
-from diagram_generator_enhanced import generate_architectural_diagram, generate_explanation_diagram
+#from diagram_generator_enhanced import make_explanation_mermaid_diagram
 from mcq_generator import (
     generate_mcqs, generate_single_mcq, generate_multiple_mcqs, 
     create_default_mcq, extract_explanation_information
 )
 
+import requests
+import tempfile
+import subprocess
+import base64, zlib
+
 # Directory to store user data
 USER_DATA_DIR = "./user_data"
 os.makedirs(USER_DATA_DIR, exist_ok=True)
+
+def make_mermaid_diagram(extracted_info: dict[str, list[dict]], output_file=None) -> str:
+    keys = list(extracted_info.keys())
+    node_ids = [chr(65 + i) for i in range(len(keys))]
+    lines = ["graph TD"]
+
+    for idx, key in enumerate(keys):
+        content = " ".join(str(item["content"]) for item in extracted_info[key])
+        label = (key + ': ' + content.replace('\n', ' ').replace('"', "'")
+                 .replace('[', '(').replace(']', ')'))
+        lines.append(f'{node_ids[idx]}["<div style=\'width:1900px; font-size:40px;\'>{label}</div>"]')
+        if idx:
+            lines.append(f"{node_ids[idx - 1]} --> {node_ids[idx]}")
+
+    mermaid_code = "\n".join(lines)
+    #print(mermaid_code)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mmd", mode='w', encoding='utf-8') as tmp:
+        tmp.write(mermaid_code)
+        mmd_path = tmp.name
+
+    if output_file is None:
+        output_file = f"diagram_{os.getpid()}_{os.urandom(4).hex()}.png"
+
+    try:
+        mmdc_path = r"C:\\Users\\kunal\\AppData\\Roaming\\npm\\mmdc.cmd"  # adjust path if needed
+        subprocess.run([
+            mmdc_path, "-i", mmd_path, "-o", output_file,
+            "--configFile", "theme.json",
+            "--scale", "4",  # 2x resolution
+            "--width", "2600",  # Width in pixels
+            
+        ], check=True)
+
+        print(f"✅ Saved {output_file}")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Mermaid rendering failed: {e}")
+    finally:
+        os.remove(mmd_path)
+
+    # Convert image to base64
+    if os.path.exists(output_file):
+        with open(output_file, "rb") as img:
+            b64 = base64.b64encode(img.read()).decode("utf-8")
+        return f"<div style='overflow-x:auto; text-align:center;'><img src='data:image/png;base64,{b64}' style='display:inline-block; width:1000px; height:1200; max-width:none; max-height:none;'></div>"
+
+    return "<p><i>Diagram generation failed.</i></p>"
+
+def make_explanation_mermaid_diagram(explanation_text, output_file) -> str:
+    # diagram_data = {
+    #     "Explanation": [{"content": explanation_text}]
+    # }
+    return make_mermaid_diagram(explanation_text, output_file=output_file)
 
 # Function to handle PDF upload and summarization with streaming
 def summarize_paper(file, model_name, summary_state):
@@ -43,25 +102,39 @@ def summarize_paper(file, model_name, summary_state):
             yield [("", "No text could be extracted from the uploaded PDF.")], summary_state
             return
         
-        # Step 1: Extract section-specific information once
+        # Step 1: Extract section-specific information
+        # Use proper tuple format for chatbot messages
         chat_history = [("", "Analyzing the paper to extract key details from each section...")]
-        yield chat_history, ""                       # still show “working” state
-
+        yield chat_history, ""
+        
         # Extract information from each section
         extracted_info = extract_section_information(parsed_data, model_name)
-
+        
+        # Store extracted information in summary_state for later use
+        paper_details_state = extracted_info
+        
         # Update chat history to indicate completion of extraction
         chat_history = [("", "Key details extracted from all sections. Generating architectural diagram...")]
-        yield chat_history, extracted_info
-        
-        # Step 2: Generate architectural diagram based on extracted section information
-        for chunk in generate_architectural_diagram(extracted_info, model_name, stream=True):
-            if "content" in chunk:
-                # Replace the last assistant message with proper tuple format
-                chat_history = [("", chunk["content"])]
-                yield chat_history, extracted_info
+        yield chat_history, paper_details_state
+
     except Exception as e:
         yield [("", f"An error occurred: {str(e)}")], summary_state
+
+def prepare_diagram_data(extracted_info):
+    """
+    Convert extracted_info into diagram_data format expected by make_mermaid_diagram.
+    Ensures each section becomes a list of dicts with "content" as a string.
+    """
+    q_info = extracted_info
+
+    diagram_data = {
+        "Question": [{"section": "explanation", "content": q_info["question_text"]}],
+        "Supporting Evidence": [{"section": "evidence", "content": e} for e in q_info["evidence"]],
+        "Key Concept": [{"section": "concept", "content": q_info["key_concept"]}]
+    }
+
+    return diagram_data
+
 
 # Function to generate explanation with sequential processing and display correct option
 def generate_explanation_streaming(paper_details, model_name, mcqs, mcq_index, chatbot):
@@ -108,14 +181,16 @@ def generate_explanation_streaming(paper_details, model_name, mcqs, mcq_index, c
         # Use proper tuple format for chatbot messages
         chatbot[explanation_index] = ("", f"Information extracted for Question {question_num}. Generating visual explanation diagram...")
         yield chatbot
-        
-        # Step 2: Generate explanation diagram based on extracted information
-        for chunk in generate_explanation_diagram(extracted_explanation_info, model_name, mcq_index, stream=True):
-            if "content" in chunk:
-                # Update the explanation message with the streaming content
-                # Use proper tuple format for chatbot messages
-                chatbot[explanation_index] = ("", f"Explanation Diagram for Question {question_num}:\n\n" + chunk["content"])
-                yield chatbot
+
+        # Instead of generating text-based ASCII diagram, use your mermaid image-based diagram
+        output_file = f"diagram_explanation_q{question_num}.png"
+        diagram_data = prepare_diagram_data(extracted_explanation_info["questions"][0])
+
+        rendered_diagram_html = make_mermaid_diagram(diagram_data, output_file)
+        #rendered_diagram_html = make_explanation_mermaid_diagram(extracted_explanation_info["questions"][0]["key_concept"], output_file)
+        chatbot[explanation_index] = ("", f"Explanation Diagram for Question {question_num}:<br>{rendered_diagram_html}")
+        yield chatbot
+
     except Exception as e:
         print(f"Error in explanation streaming: {str(e)}")
         # Use proper tuple format for chatbot messages
@@ -255,126 +330,74 @@ def save_user_session(user_id, name, email, chat_history, mcq_data):
     return session_file
 
 # Function to handle PDF upload, summarization, and automatic MCQ generation
-def auto_summarize_with_mcqs(file, model_name, summary_state, mcq_state, user_id, name, email):
+def auto_summarize_with_mcqs(file, model_name,
+                             summary_state, mcq_state,
+                             user_id, name, email):
+    """Pipeline: PDF → summary → Mermaid PNG → MCQs (10 outputs)."""
+
+    def make_out(chat, details_state, mcq_state_val,
+                 mcq1_upd, mcq2_upd, mcq3_upd, submit_upd):
+        return (
+            chat, details_state, mcq_state_val,
+            mcq1_upd, mcq2_upd, mcq3_upd,
+            submit_upd,
+            user_id, name, email
+        )
+
     if not file:
-        yield (
-            [("", "Please upload a valid PDF file.")],  # Chatbot output - proper tuple format
-            summary_state,  # Summary state
-            mcq_state,  # MCQ state
-            gr.update(label="Question 1", choices=[]),  # Radio buttons for MCQ 1
-            gr.update(label="Question 2", choices=[]),  # Radio buttons for MCQ 2
-            gr.update(label="Question 3", choices=[]),  # Radio buttons for MCQ 3
-            gr.update(interactive=False),  # Submit answers button
-            user_id,  # User ID
-            name,  # User name
-            email  # User email
-        )
+        chat = [("", "Please upload a valid PDF file.")]
+        yield make_out(chat, summary_state, mcq_state,
+                       gr.update(label="Question 1", choices=[]),
+                       gr.update(label="Question 2", choices=[]),
+                       gr.update(label="Question 3", choices=[]),
+                       gr.update(interactive=False))
         return
+
+    for out in summarize_paper(file, model_name, summary_state):
+        chat, paper_details_state = out[0], out[1]
+        yield make_out(chat, paper_details_state, mcq_state,
+                       gr.update(label="Question 1", choices=[]),
+                       gr.update(label="Question 2", choices=[]),
+                       gr.update(label="Question 3", choices=[]),
+                       gr.update(interactive=False))
+    paper_details = paper_details_state
+
+    #print("Paper details:", paper_details)
+    #print(type(paper_details))
     
-    # Generate the summary using the two-step process
-    summary_generator = summarize_paper(file, model_name, summary_state)
-    summary, paper_details = None, None
-    
-    for chunk, paper_details_state in summary_generator:
-        summary = chunk
-        paper_details = paper_details_state
-        yield (
-            summary,  # Chatbot output - already in proper tuple format from summarize_paper
-            paper_details,  # Paper details state (replaces summary_state)
-            mcq_state,  # MCQ state
-            gr.update(label="Question 1", choices=[]),  # Radio buttons for MCQ 1
-            gr.update(label="Question 2", choices=[]),  # Radio buttons for MCQ 2
-            gr.update(label="Question 3", choices=[]),  # Radio buttons for MCQ 3
-            gr.update(interactive=False),  # Submit answers button
-            user_id,  # User ID
-            name,  # User name
-            email  # User email
-        )
-    
-    # Automatically generate MCQs after summary is complete, using paper details instead of summary
-    # Generate new MCQs
-    mcqs = generate_mcqs(paper_details, model_name, [])  # Pass empty list instead of None
-    
-    # We should always get MCQs now due to fallback mechanisms
-    if not mcqs:
-        print("Warning: generate_mcqs returned empty list despite fallbacks")
-        # Create default MCQs as a last resort
-        mcqs = [
-            create_default_mcq(0, paper_details),
-            create_default_mcq(1, paper_details),
-            create_default_mcq(2, paper_details)
-        ]
-    
-    # Ensure we have exactly 3 MCQs
+    # Step 2: Mermaid diagram
+    diagram_html = make_mermaid_diagram(paper_details)
+    chat.append(("", diagram_html))
+    yield make_out(chat, paper_details, mcq_state,
+                   gr.update(label="Question 1", choices=[]),
+                   gr.update(label="Question 2", choices=[]),
+                   gr.update(label="Question 3", choices=[]),
+                   gr.update(interactive=False))
+
+    # Step 3: generate MCQs
+    mcqs = generate_mcqs(paper_details, model_name, []) or [create_default_mcq(i, paper_details) for i in range(3)]
     while len(mcqs) < 3:
-        default_index = len(mcqs)
-        mcqs.append(create_default_mcq(default_index, paper_details))
-    
-    # Initialize previous_mcqs as empty list if mcq_state is None
-    previous_mcqs = []
-    if mcq_state is not None:
-        # Get previous_mcqs from mcq_state, defaulting to empty list if not present or None
-        previous_mcqs = mcq_state.get("previous_mcqs", [])
-        if previous_mcqs is None:
-            previous_mcqs = []
-    
-    # Update MCQ state
+        mcqs.append(create_default_mcq(len(mcqs), paper_details))
     new_mcq_state = {
         "current_mcqs": mcqs,
-        "previous_mcqs": previous_mcqs + mcqs,  # Ensure both are lists before concatenating
+        "previous_mcqs": mcqs,
         "attempts": [],
-        "pending_explanations": []  # Initialize empty pending explanations list
+        "pending_explanations": []
     }
-    
-    # Display MCQs with radio buttons
-    mcq_message = "Answer the following questions based on the paper:\n\n"
-    for i, mcq in enumerate(mcqs):
-        mcq_message += f"{i + 1}. {mcq['question']}\n"
-    
-    # Add message with proper tuple format
-    summary.append(("", mcq_message))
-    
-    # Prepare radio button choices for each MCQ with full question text in label
-    # Format options to display on separate lines
-    radio_choices = []
-    
-    for i in range(3):
-        if i < len(mcqs):
-            # Create choices with option letter and text, each on a separate line
-            choices = []
-            for option, text in sorted(mcqs[i]["options"].items()):
-                choices.append(f"{option}. {text}")
-            radio_choices.append(choices)
-        else:
-            radio_choices.append([])
-    
+    intro = "Answer the following questions based on the paper:\n\n" + \
+            "\n".join(f"{i+1}. {m['question']}" for i, m in enumerate(mcqs))
+    chat.append(("", intro))
+    radio_choices = [[f"{opt}. {txt}" for opt, txt in sorted(m["options"].items())] for m in mcqs]
     # Save session data
     if user_id and name and email:
-        save_user_session(user_id, name, email, summary, new_mcq_state)
-    
-    # Debug print to verify MCQs are being generated
-    print(f"Generated MCQs: {len(mcqs)}")
-    for i, mcq in enumerate(mcqs):
-        print(f"MCQ {i+1}: {mcq['question']}")
-        print(f"Options: {mcq['options']}")
-        print(f"Correct Answer: {mcq['correct_answer']}")
-    
-    # Debug print for radio button updates
-    print(f"Radio choices for MCQ 1: {radio_choices[0]}")
-    print(f"Label for MCQ 1: Question 1: {mcqs[0]['question']}")
-    
-    yield (
-        summary,  # Chatbot output - already in proper tuple format
-        paper_details,  # Paper details state
-        new_mcq_state,  # MCQ state
-        gr.update(label=f"Question 1: {mcqs[0]['question']}", choices=radio_choices[0], visible=True),  # Radio buttons for MCQ 1
-        gr.update(label=f"Question 2: {mcqs[1]['question']}", choices=radio_choices[1], visible=True),  # Radio buttons for MCQ 2
-        gr.update(label=f"Question 3: {mcqs[2]['question']}", choices=radio_choices[2], visible=True),  # Radio buttons for MCQ 3
-        gr.update(interactive=True, visible=True),  # Submit answers button
-        user_id,  # User ID
-        name,  # User name
-        email  # User email
-    )
+        save_user_session(user_id, name, email, paper_details, new_mcq_state)
+
+    yield make_out(chat, paper_details, new_mcq_state,
+                   gr.update(label=f"Question 1: {mcqs[0]['question']}", choices=radio_choices[0], visible=True),
+                   gr.update(label=f"Question 2: {mcqs[1]['question']}", choices=radio_choices[1], visible=True),
+                   gr.update(label=f"Question 3: {mcqs[2]['question']}", choices=radio_choices[2], visible=True),
+                   gr.update(interactive=True, visible=True))
+
 
 # Modified: Function to handle MCQ answer submission with sequential explanations
 def submit_mcq_answers(chatbot, paper_details, model_name, mcq_state, mcq1_answer, mcq2_answer, mcq3_answer, user_id, name, email):
@@ -438,14 +461,14 @@ def submit_mcq_answers(chatbot, paper_details, model_name, mcq_state, mcq1_answe
             result_message += "\nGenerating visual explanations for each incorrect answer one by one..."
         else:
             result_message += "\nGenerating visual explanation for the incorrect answer..."
-    
+
     # Add message with proper tuple format
     chatbot.append(("", result_message))
-    
+  
     # Save session data
     if user_id and name and email:
         save_user_session(user_id, name, email, chatbot, mcq_state)
-    
+
     # If there are incorrect answers, store them in the MCQ state for sequential processing
     if incorrect_indices:
         # Store the incorrect indices in the MCQ state
@@ -713,8 +736,10 @@ def create_interface():
                     chatbot = gr.Chatbot(
                         label="Research Assistant",
                         height=500,
-                        show_copy_button=True
+                        show_copy_button=True,
+                        sanitize_html=False # Allow Mermaid markdown rendering
                     )
+                    
                     
                     # MCQ interface
                     with gr.Group():
@@ -724,6 +749,7 @@ def create_interface():
                         
                         with gr.Row():
                             submit_answers_button = gr.Button("Submit Answers", interactive=False)
+            
         
         # Event handlers - EXACT MATCH to original event handlers
         register_button.click(
@@ -738,6 +764,13 @@ def create_interface():
             outputs=[chatbot, paper_details_state, mcq_state, mcq1, mcq2, mcq3, submit_answers_button, user_id_state, user_name_state, user_email_state]
         )
         
+        # file_upload.change(
+        #     fn=summarize_paper,
+        #     inputs=[file_upload, model_dropdown, paper_details_state],
+        #     outputs=[chatbot, paper_details_state, diagram_display]   # ← add third slot
+        # )
+
+
         submit_answers_button.click(
             fn=submit_mcq_answers,
             inputs=[chatbot, paper_details_state, model_dropdown, mcq_state, mcq1, mcq2, mcq3, user_id_state, user_name_state, user_email_state],
