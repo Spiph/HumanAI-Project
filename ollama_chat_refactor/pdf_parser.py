@@ -178,6 +178,15 @@ def detect_two_column_page_combined(page, threshold=0.95, white_ratio_threshold=
     return white_ratio > white_ratio_threshold and cluster_distance > 150 and balanced_clusters
 
 def detect_document_layout(pdf):
+    """
+    Detect the layout of a document (single-column or two-column).
+    
+    Args:
+        pdf: The PDF document to analyze
+        
+    Returns:
+        str: "two-column" or "single-column"
+    """
     page_limit = min(3, len(pdf.pages))
     two_column_votes = 0
     for i in range(page_limit):
