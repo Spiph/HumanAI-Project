@@ -21,19 +21,19 @@ def extract_section_information(parsed_data, model_name):
     # Define the sections we want to extract information from
     section_info = {
         "introduction": {
-            "category": "Research Need",
+            "category": "Introduction",
             "prompt": "Extract 2-3 complete sentences that describe why this research is needed and what the authors want to do. Focus on the problem statement, research gap, and objectives."
         },
         "method": {
-            "category": "Solution Approach",
+            "category": "Method",
             "prompt": "Extract 2-3 complete sentences that describe the solution or methodology proposed by the authors. Focus on the approach, techniques, and methods used."
         },
         "implementation": {
-            "category": "Solution Approach",
+            "category": "Method",
             "prompt": "Extract 2-3 complete sentences that describe how the solution was implemented. Focus on the technical aspects, tools, and frameworks used."
         },
         "experiments": {
-            "category": "Study Conduct",
+            "category": "Experiments",
             "prompt": "Extract 2-3 complete sentences that describe how the study was conducted. Focus on the experimental setup, datasets, and evaluation metrics."
         },
         "results": {
@@ -45,7 +45,7 @@ def extract_section_information(parsed_data, model_name):
             "prompt": "Extract 2-3 complete sentences from the conclusion. Focus on the main takeaways, limitations, and future work."
         },
         "limitations": {
-            "category": "Limitations",
+            "category": "Conclusion",
             "prompt": "Extract 2-3 complete sentences that describe the limitations of the study. Focus on constraints, shortcomings, and areas for improvement."
         }
     }
