@@ -133,6 +133,66 @@ SECTION_HEADER_MAP = {
     "index terms": "keywords",
 }
 
+# Make updates for specific papers
+SECTION_HEADER_MAP.update({
+    # Argasiński & Marecki (2024)
+    "translation": "method",
+    "summary of the translation": "results",
+    "retelling": "method",
+    "prosaic adaptation": "method",
+    "illustrations": "appendix",
+    "interview with the translator (that is - gpt)": "method",
+    "publication": "conclusion",
+    "final remarks": "conclusion",
+
+    # Losh (2023)
+    "hyperlinking affordances and user-generated content": "introduction",
+    "the paradigm of visibility labor": "introduction",
+    "evolving database infrastructures": "introduction",
+    "the paradigm of invisibility labor": "introduction",
+
+    # Karami et al. (2021)
+    "motivational factors in spreading fake news": "introduction",
+    "uncertainty": "method",
+    "emotions": "method",
+    "lack of control": "method",
+    "relationship enhancement": "method",
+    "rank": "method",
+    "data preparation for studying fake news spreaders": "data",
+    "feature extraction": "method",
+    "profiling fake news spreaders": "experiments",
+    "significance of psychological features": "results",
+    "fake news spreader classifier": "method",
+
+    # Ayoobi et al. (2024)
+    "dataset": "data",  # already present but reaffirmed
+    "methodology": "method",
+    "term awareness and uncertainty reduction": "method",
+    "estimating probabilities in esas metric equations": "method",
+    "evaluating the effectiveness of esas metric": "experiments",
+    "results and discussion": "results",  # already present
+    "cues based on 10 most significant unigrams for different level of fake": "results",
+    "cues based on 10 most significant unigrams for different news topics": "results",
+    "cues based on 10 most significant bigrams": "results",
+    "cues based on 10 most significant bigrams in pos tagging": "results",
+    "acknowledgments": "acknowledgments",  # reaffirmed
+
+    # Picca (2024)
+    "\"explanation\" and \"understanding\" in diltheyan hermeneutics": "method",
+    "emotions in human understanding": "background",  # treat as introduction
+    "integrating emotions into artificial intelligence: maybe an insurmountable limit": "method",
+
+    # Khan & Herder (2023)
+    "theoretical framework": "introduction",
+    "the spiral of silence theory": "introduction",
+    "recommender systems and the spiral of silence": "introduction",
+    "survey of relevant previous work": "introduction",
+    "fairness issues in recommender systems": "introduction",
+    "discussion and interpretation of findings": "conclusion",
+    "conclusion and future research": "conclusion",
+})
+
+
 # Header regex pattern
 HEADER_REGEX = r"(?im)^\s*(?:\d+(?:\.\d+)*[.)]?\s*)?(?P<header>" + "|".join(re.escape(h) for h in SECTION_HEADER_MAP.keys()) + r")\s*$"
 

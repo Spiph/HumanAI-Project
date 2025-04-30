@@ -58,7 +58,7 @@ def make_mermaid_diagram(extracted_info: dict[str, list[dict]], output_file=None
         output_file = f"diagram_{os.getpid()}_{os.urandom(4).hex()}.png"
 
     try:
-        mmdc_path = r"C:\\Users\\kunal\\AppData\\Roaming\\npm\\mmdc.cmd"  # adjust path if needed
+        mmdc_path = r"C:\\Users\\canno\\AppData\\Roaming\\npm\\mmdc.cmd"  # adjust path if needed
         subprocess.run([
             mmdc_path, "-i", mmd_path, "-o", output_file,
             "--configFile", "theme.json",

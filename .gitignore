@@ -14,3 +14,13 @@ user_data/
 
 # Gradio
 .gradio/
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Mermaid Diagrams
+diagram*
