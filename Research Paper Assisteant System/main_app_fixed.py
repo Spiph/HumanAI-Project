@@ -58,7 +58,8 @@ def make_mermaid_diagram(extracted_info: dict[str, list[dict]], output_file=None
         output_file = f"diagram_{os.getpid()}_{os.urandom(4).hex()}.png"
 
     try:
-        mmdc_path = r"C:\\Users\\canno\\AppData\\Roaming\\npm\\mmdc.cmd"  # adjust path if needed
+        mmdc_path = r"C:\\Users\\canno\\AppData\\Roaming\\npm\\mmdc.cmd"
+        # mmdc_path = "mmdc"
         subprocess.run([
             mmdc_path, "-i", mmd_path, "-o", output_file,
             "--configFile", "theme.json",
@@ -683,9 +684,28 @@ def update_countdown(seconds_remaining):
     m, s = divmod(seconds_remaining, 60)
     return f"{m}:{s:02d}", seconds_remaining - 1
 
-# show_quiz already defined:
-# def show_quiz():
-#     return gr.update(visible=False), gr.update(visible=True)
+def auto_submit_full_quiz(q1, q2, q3, q4, q5):
+    # you’ll want to replace this stub with your real grading logic
+    # for now it just returns a confirmation string
+    return f"Auto‑submitted: {q1}, {q2}, {q3}, {q4}, {q5}"
+
+def show_quiz_and_start_timers():
+    return (
+        gr.update(visible=False),  # hide the practice pane
+        gr.update(visible=True),   # show the quiz pane
+        gr.update(active=True),     # start the 1 sec countdown
+        gr.update(active=True)      # start the 300 sec auto‑submit
+    )
+
+def list_pdfs():
+    """Return all PDF filenames in ./pdf"""
+    folder = "pdf"
+    return [f for f in os.listdir(folder) if f.lower().endswith(".pdf")]
+
+def get_pdf_path(filename: str):
+    """Turn a filename into a full path for gr.File"""
+    return os.path.join("pdf", filename)
+
 
 # ── right before def create_interface():
 def show_quiz():
@@ -743,6 +763,13 @@ def create_interface():
                         value="gemma3:1b",
                         label="Select Model"
                     )
+
+                    # Dropdown to pick a PDF from the local pdf/ folder
+                    pdf_dropdown = gr.Dropdown(
+                        choices=list_pdfs(),
+                        label="Select Paper from Library",
+                        interactive=True
+                    )
                     
                     # File upload
                     file_upload = gr.File(label="Upload Research Paper (PDF)", file_types=[".pdf"])
@@ -783,6 +810,9 @@ def create_interface():
                         quiz_timer      = gr.Timer(value=600.0, active=True, render=True)
                      # ── full 5‑question quiz screen (hidden by default)
                     with gr.Group(visible=False) as quiz_group:
+                        # ── countdown every second, and one‐shot at 5 minutes
+                        quiz_countdown_timer = gr.Timer(value=1.0, active=False, render=True)
+                        quiz_submit_timer    = gr.Timer(value=300.0, active=False, render=True)
                         gr.Markdown("## Take the Full Quiz")
                         q1 = gr.Radio(
                             choices=["A. …","B. …","C. …","D. …"], 
@@ -795,6 +825,10 @@ def create_interface():
                         q4 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="4. …", elem_classes=["options-radio"])
                         q5 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="5. …", elem_classes=["options-radio"])
                         submit_quiz = gr.Button("Submit Quiz")
+
+                        # ── 5‑minute timer display & state
+                        quiz_timer_display = gr.Textbox(label="Time remaining", value="5:00", interactive=False)
+                        quiz_time_state   = gr.State(300)   # 300 seconds = 5 minutes
             
         
         # Event handlers - EXACT MATCH to original event handlers
@@ -810,12 +844,12 @@ def create_interface():
             outputs=[chatbot, paper_details_state, mcq_state, mcq1, mcq2, mcq3, submit_answers_button, user_id_state, user_name_state, user_email_state]
         )
         
-        # file_upload.change(
-        #     fn=summarize_paper,
-        #     inputs=[file_upload, model_dropdown, paper_details_state],
-        #     outputs=[chatbot, paper_details_state, diagram_display]   # ← add third slot
-        # )
-
+        # when you pick from the library dropdown, fill the file_upload
+        pdf_dropdown.change(
+            fn=get_pdf_path,
+            inputs=[pdf_dropdown],
+            outputs=[file_upload]
+        )
 
         submit_answers_button.click(
             fn=submit_mcq_answers,
@@ -824,9 +858,9 @@ def create_interface():
         )
 
         proceed_button.click(
-            fn=show_quiz,
+            fn=show_quiz_and_start_timers,
             inputs=[],
-            outputs=[learning_group, quiz_group]
+            outputs=[learning_group, quiz_group, quiz_countdown_timer, quiz_submit_timer]
         )
 
         # every second, decrement the counter
@@ -838,11 +872,30 @@ def create_interface():
 
         # once after 10 minutes, auto‑swap screens
         quiz_timer.tick(
-            fn=show_quiz,
+            fn=show_quiz_and_start_timers,
             inputs=[],
-            outputs=[learning_group, quiz_group]
+            outputs=[learning_group, quiz_group, quiz_countdown_timer, quiz_submit_timer]
         )
 
+        # ── now bind the full‑quiz timers:
+        quiz_countdown_timer.tick(
+            fn=update_countdown,
+            inputs=[quiz_time_state],
+            outputs=[quiz_timer_display, quiz_time_state]
+        )
+        # auto–submit at zero
+        quiz_submit_timer.tick(
+            fn=auto_submit_full_quiz,
+            inputs=[q1, q2, q3, q4, q5],
+            outputs=[]   # or wherever you show results
+        )
+
+        # and your manual submit, too
+        submit_quiz.click(
+            fn=auto_submit_full_quiz,
+            inputs=[q1, q2, q3, q4, q5],
+            outputs=[]
+        )
         
         # Warm up the model when the app starts
         demo.load(fn=lambda: warm_up_model(model_name="gemma3:1b"))
