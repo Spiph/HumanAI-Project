@@ -15,6 +15,9 @@ import random
 from collections import defaultdict, OrderedDict
 import base64, zlib
 
+from custom_css import CUSTOM_CSS
+from quiz_questions import PAPER_QUIZ
+
 
 # Import from our modules
 from pdf_parser_fix import extract_text_from_pdf_with_sections
@@ -579,104 +582,7 @@ def warm_up_model(model_name="gemma3:1b"):
     except Exception as e:
         print(f"Error warming up the model: {str(e)}")
 
-# Custom CSS for improved visual appearance and dark mode compatibility
-CUSTOM_CSS = """
-/* Enhanced CSS for strict vertical layout of radio options */
-.options-radio label {
-    display: block !important;
-    margin-bottom: 10px !important;
-    width: 100% !important;
-    clear: both !important;
-    float: none !important;
-}
 
-/* Force each radio option to be on its own line */
-.options-radio .gr-radio-row {
-    display: block !important;
-    margin-bottom: 8px !important;
-}
-
-/* Ensure radio buttons are properly aligned */
-.options-radio input[type='radio'] {
-    margin-right: 10px !important;
-    vertical-align: middle !important;
-}
-
-/* Additional styling to prevent horizontal layout */
-.options-radio .gr-form {
-    display: block !important;
-}
-
-/* Prevent any flex or grid layout that might cause horizontal alignment */
-.options-radio > div {
-    display: block !important;
-    flex-direction: column !important;
-}
-
-/* Home container styling */
-.home-container {
-    text-align: center;
-    padding: 20px;
-    max-width: 800px;
-    margin: 0 auto;
-}
-
-/* Feature list styling */
-.feature-list {
-    text-align: left;
-    margin: 20px auto;
-    max-width: 600px;
-}
-
-/* Diagram container with dark mode compatibility */
-.diagram-container {
-    font-family: monospace;
-    white-space: pre;
-    overflow-x: auto;
-    padding: 15px;
-    border-radius: 5px;
-    text-align: center;
-    margin: 10px auto;
-    max-width: 100%;
-    display: inline-block;
-}
-
-/* Dark mode compatibility for diagrams */
-.dark .diagram-container {
-    background-color: #2a2a2a !important;
-    color: #ffffff !important;
-}
-
-/* Light mode styling for diagrams */
-.light .diagram-container {
-    background-color: #f8f9fa !important;
-    color: #000000 !important;
-}
-
-/* Center-align all pre elements (used for diagrams) */
-pre {
-    text-align: center !important;
-    margin: 0 auto !important;
-    display: inline-block !important;
-    white-space: pre !important;
-}
-
-/* Ensure chatbot messages are visible in both light and dark modes */
-.dark .message-bubble {
-    color: #ffffff !important;
-}
-
-.light .message-bubble {
-    color: #000000 !important;
-}
-
-/* Ensure diagrams are properly centered */
-.message-bubble pre {
-    display: block !important;
-    margin: 0 auto !important;
-    text-align: center !important;
-}
-"""
 def update_countdown(seconds_remaining):
     """
     Given how many seconds are left, format “M:SS” and tick down by one.
@@ -685,9 +591,12 @@ def update_countdown(seconds_remaining):
     return f"{m}:{s:02d}", seconds_remaining - 1
 
 def auto_submit_full_quiz(q1, q2, q3, q4, q5):
-    # you’ll want to replace this stub with your real grading logic
-    # for now it just returns a confirmation string
-    return f"Auto‑submitted: {q1}, {q2}, {q3}, {q4}, {q5}"
+    # Build a human‐readable summary of whatever the user selected
+    answers = [q1, q2, q3, q4, q5]
+    msg = f"⏰ Time's up! Auto‑submitting your answers: {answers}"
+    # Chatbot expects a list of (user, assistant) tuples.
+    # We’ll leave “user” blank and put our msg as the assistant’s reply.
+    return [("", msg)]
 
 def show_quiz_and_start_timers():
     return (
@@ -706,11 +615,49 @@ def get_pdf_path(filename: str):
     """Turn a filename into a full path for gr.File"""
     return os.path.join("pdf", filename)
 
-
 # ── right before def create_interface():
 def show_quiz():
     # hide the learning/practice group, show the quiz group
     return gr.update(visible=False), gr.update(visible=True)
+
+def load_quiz_questions(selected_title):
+    """
+    Given a paper title, return exactly five gr.update(...) for q1–q5,
+    setting label, choices, and resetting value.
+    If fewer than five questions exist, hide the extra components.
+    """
+    questions = PAPER_QUIZ.get(selected_title, [])
+    updates = []
+    for i in range(5):
+        if i < len(questions):
+            q = questions[i]
+            opts = [text for (text, correct) in q["choices"]]
+            updates.append(
+                gr.update(label=f"{i+1}. {q['question']}", choices=opts, value=None, visible=True)
+            )
+        else:
+            updates.append(gr.update(visible=False))
+    return updates
+
+def grade_full_quiz(selected_title, a1, a2, a3, a4, a5):
+    """
+    Simple grader: counts how many of the five answers match PAPER_QUIZ[selected_title].
+    Returns a single chat message.
+    """
+    questions = PAPER_QUIZ.get(selected_title, [])
+    user_answers = [a1, a2, a3, a4, a5]
+    correct = 0
+    for ans, q in zip(user_answers, questions):
+        # find the one true choice for this question
+        correct_text = next(text for text, ok in q["choices"] if ok)
+        if ans == correct_text:
+            correct += 1
+
+    total = len(questions)
+    msg = f"📝 You scored {correct}/{total} correct."
+    # Chatbot wants a list of (user, assistant)
+    return [("", msg)]
+
 
 def create_interface():
     # Create the Gradio interface with the exact same UI as the original
@@ -813,6 +760,11 @@ def create_interface():
                         # ── countdown every second, and one‐shot at 5 minutes
                         quiz_countdown_timer = gr.Timer(value=1.0, active=False, render=True)
                         quiz_submit_timer    = gr.Timer(value=300.0, active=False, render=True)
+
+                        # ── 5‑minute timer display & state
+                        quiz_timer_display = gr.Textbox(label="Time remaining", value="5:00", interactive=False)
+                        quiz_time_state   = gr.State(300)   # 300 seconds = 5 minutes
+
                         gr.Markdown("## Take the Full Quiz")
                         q1 = gr.Radio(
                             choices=["A. …","B. …","C. …","D. …"], 
@@ -826,9 +778,7 @@ def create_interface():
                         q5 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="5. …", elem_classes=["options-radio"])
                         submit_quiz = gr.Button("Submit Quiz")
 
-                        # ── 5‑minute timer display & state
-                        quiz_timer_display = gr.Textbox(label="Time remaining", value="5:00", interactive=False)
-                        quiz_time_state   = gr.State(300)   # 300 seconds = 5 minutes
+                        
             
         
         # Event handlers - EXACT MATCH to original event handlers
@@ -849,6 +799,13 @@ def create_interface():
             fn=get_pdf_path,
             inputs=[pdf_dropdown],
             outputs=[file_upload]
+        )
+
+        # AND ALSO populate the quiz questions when the user picks from the library
+        pdf_dropdown.change(
+            fn=load_quiz_questions,
+            inputs=[pdf_dropdown],
+            outputs=[q1, q2, q3, q4, q5]
         )
 
         submit_answers_button.click(
@@ -883,18 +840,18 @@ def create_interface():
             inputs=[quiz_time_state],
             outputs=[quiz_timer_display, quiz_time_state]
         )
-        # auto–submit at zero
-        quiz_submit_timer.tick(
-            fn=auto_submit_full_quiz,
-            inputs=[q1, q2, q3, q4, q5],
-            outputs=[]   # or wherever you show results
+        # manual click → simple grade
+        submit_quiz.click(
+            fn=grade_full_quiz,
+            inputs=[pdf_dropdown, q1, q2, q3, q4, q5],
+            outputs=[chatbot]
         )
 
-        # and your manual submit, too
-        submit_quiz.click(
-            fn=auto_submit_full_quiz,
-            inputs=[q1, q2, q3, q4, q5],
-            outputs=[]
+        # auto on timeout → same grade
+        quiz_submit_timer.tick(
+            fn=grade_full_quiz,
+            inputs=[pdf_dropdown, q1, q2, q3, q4, q5],
+            outputs=[chatbot]
         )
         
         # Warm up the model when the app starts
