@@ -309,6 +309,7 @@ def save_user_session(
     quiz_end: datetime.datetime = None,
     quiz_answers: list[str] = None,
     quiz_grade: int = None,
+    age=None, gender=None, degree=None, papers_read=None, comfort=None,
 ):
     """
     Saves everything about this user’s session, including:
@@ -349,6 +350,13 @@ def save_user_session(
             "answers":    quiz_answers            if quiz_answers else [],
             "grade":      quiz_grade              if quiz_grade is not None else None,
         },
+        "demographics": {
+           "age":           age,
+           "gender":        gender,
+           "degree":        degree,
+           "papers_read":   papers_read,
+           "comfort_level": comfort
+        },
     }
 
     # Write to disk
@@ -361,7 +369,7 @@ def save_user_session(
 # Function to handle PDF upload, summarization, and automatic MCQ generation
 def auto_summarize_with_mcqs(file, model_name,
                              summary_state, mcq_state,
-                             user_id, name, email):
+                             user_id, name, email, age, gender, degree, papers_read, comfort,):
     """Pipeline: PDF → summary → Mermaid PNG → MCQs (10 outputs)."""
 
     def make_out(chat, details_state, mcq_state_val,
@@ -370,7 +378,7 @@ def auto_summarize_with_mcqs(file, model_name,
             chat, details_state, mcq_state_val,
             mcq1_upd, mcq2_upd, mcq3_upd,
             submit_upd,
-            user_id, name, email
+            user_id, name, email, age, gender, degree, papers_read, comfort
         )
 
     if not file:
@@ -419,7 +427,7 @@ def auto_summarize_with_mcqs(file, model_name,
     radio_choices = [[f"{opt}. {txt}" for opt, txt in sorted(m["options"].items())] for m in mcqs]
     # Save session data
     if user_id and name and email:
-        save_user_session(user_id, name, email, paper_details, new_mcq_state)
+        save_user_session(user_id, name, email, comfort, paper_details, new_mcq_state, age, gender, degree, papers_read)
 
     yield make_out(chat, paper_details, new_mcq_state,
                    gr.update(label=f"Question 1: {mcqs[0]['question']}", choices=radio_choices[0], visible=True),
@@ -429,7 +437,7 @@ def auto_summarize_with_mcqs(file, model_name,
 
 
 # Modified: Function to handle MCQ answer submission with sequential explanations
-def submit_mcq_answers(chatbot, paper_details, model_name, mcq_state, mcq1_answer, mcq2_answer, mcq3_answer, user_id, name, email):
+def submit_mcq_answers(chatbot, paper_details, model_name, mcq_state, mcq1_answer, mcq2_answer, mcq3_answer, user_id, name, email, age, gender, degree, papers_read, comfort):
     if not mcq_state or "current_mcqs" not in mcq_state or not mcq_state["current_mcqs"]:
         return (
             chatbot + [("", "Error: No active MCQs found.")],  # Chatbot output - proper tuple format
@@ -496,7 +504,7 @@ def submit_mcq_answers(chatbot, paper_details, model_name, mcq_state, mcq1_answe
   
     # Save session data
     if user_id and name and email:
-        save_user_session(user_id, name, email, chatbot, mcq_state)
+        save_user_session(user_id, name, email, chatbot, mcq_state, age, gender, degree, papers_read, comfort)
 
     # If there are incorrect answers, store them in the MCQ state for sequential processing
     if incorrect_indices:
@@ -651,6 +659,10 @@ def basename_without_ext(path: str) -> str:
     return os.path.splitext(base)[0]
 
 def load_quiz_questions(selected_pdf_filename):
+    # If user wants to upload their own, hide all quiz widgets
+    if selected_pdf_filename == "Upload my own paper":
+        return [gr.update(visible=False) for _ in range(5)]
+    
     title = basename_without_ext(selected_pdf_filename)
     questions = PAPER_QUIZ.get(title, [])
     updates = []
@@ -696,7 +708,14 @@ def create_interface():
         user_id_state = gr.State("")
         user_name_state = gr.State("")
         user_email_state = gr.State("")
-        
+
+        # Survey states (all optional)
+        age_state           = gr.State("")
+        gender_state        = gr.State("")
+        degree_state        = gr.State("")
+        papers_read_state   = gr.State("")
+        comfort_state       = gr.State(3)   # default midpoint
+
         # Research assistant states
         paper_details_state = gr.State("")  # Persistent state for the paper details (replaces summary_state)
         mcq_state = gr.State(None)  # Persistent state for MCQs
@@ -725,6 +744,34 @@ def create_interface():
                 with gr.Column(scale=2):
                     name_input = gr.Textbox(label="Your Name", placeholder="Enter your full name")
                     email_input = gr.Textbox(label="Your Email", placeholder="Enter your email address")
+                    age_input = gr.Textbox(label="Age", placeholder="Optional")
+                   
+                    gender_input = gr.Radio(
+                        label="Gender",
+                        choices=["Male","Female","Other","Prefer not to answer"],
+                        value=None
+                    )
+
+                    degree_input = gr.Dropdown(
+                        label="Highest degree earned",
+                        choices=["High school","Bachelor's","Master's","PhD","Other","Prefer not to answer"],
+                        value=None
+                    )
+
+                    papers_read_input = gr.Textbox(
+                        label="How many academic papers have you read before?",
+                        placeholder="Optional"
+                    )
+
+                    comfort_input = gr.Slider(
+                        label="Comfort reading academic papers (1–5)",
+                        minimum=1, maximum=5, step=1, value=3
+                    )
+
+                    register_button = gr.Button("Start Learning")
+                    registration_error = gr.Textbox(label="", visible=True)
+                with gr.Column(scale=1):
+                    pass
                     register_button = gr.Button("Start Learning")
                     registration_error = gr.Textbox(label="", visible=True)
                 with gr.Column(scale=1):
@@ -743,7 +790,7 @@ def create_interface():
 
                     # Dropdown to pick a PDF from the local pdf/ folder
                     pdf_dropdown = gr.Dropdown(
-                        choices=list_pdfs(),
+                        choices=["Upload my own paper"] + list_pdfs(),
                         label="Select Paper from Library",
                         interactive=True
                     )
@@ -759,6 +806,9 @@ def create_interface():
                         sanitize_html=False # Allow Mermaid markdown rendering
                     )
                     
+                    with gr.Group(visible=False) as upload_group:
+                        file_upload = gr.File(label="Upload Research Paper (PDF)", file_types=[".pdf"])
+
                     
                     # MCQ interface
                     with gr.Group() as learning_group:
@@ -812,15 +862,59 @@ def create_interface():
             
         
         # Event handlers - EXACT MATCH to original event handlers
+        def register_user(name, email, age, gender, degree, papers_read, comfort):
+            # only name & email required
+            if not name or not email:
+                return (
+                    gr.update(visible=True),
+                    gr.update(visible=False),
+                    "", "", "", "", "", "", "Please enter both name and email to continue."
+                )
+            user_id = str(uuid.uuid4())
+            # store optional survey answers in State
+            return (
+                gr.update(visible=False),   # hide registration
+                gr.update(visible=True),    # show main interface
+                user_id, name, email,
+                age, gender, degree,
+                papers_read, comfort,
+                ""
+            )
+        
         register_button.click(
             fn=register_user,
-            inputs=[name_input, email_input],
-            outputs=[home_page, main_interface, user_id_state, user_name_state, user_email_state, registration_error]
+            inputs=[
+                name_input, email_input,
+                age_input, gender_input,
+                degree_input, papers_read_input,
+                comfort_input
+            ],
+            outputs=[
+                home_page, main_interface,
+                user_id_state, user_name_state, user_email_state,
+                age_state, gender_state, degree_state,
+                papers_read_state, comfort_state,
+                registration_error
+            ]
         )
+
+
+
+        pdf_dropdown.change(
+            fn=lambda title: (
+                # for quiz questions
+                *load_quiz_questions(title),
+                # for upload_group visibility
+                gr.update(visible=(title == "Upload my own paper"))
+            ),
+            inputs=[pdf_dropdown],
+            outputs=[q1, q2, q3, q4, q5, upload_group]
+        )
+
         
         file_upload.change(
             fn=auto_summarize_with_mcqs,
-            inputs=[file_upload, model_dropdown, paper_details_state, mcq_state, user_id_state, user_name_state, user_email_state],
+            inputs=[file_upload, model_dropdown, paper_details_state, mcq_state, user_id_state, user_name_state, user_email_state, age_state, gender_state, degree_state, papers_read_state, comfort_state],
             outputs=[chatbot, paper_details_state, mcq_state, mcq1, mcq2, mcq3, submit_answers_button, user_id_state, user_name_state, user_email_state]
         )
         
@@ -840,7 +934,7 @@ def create_interface():
 
         submit_answers_button.click(
             fn=submit_mcq_answers,
-            inputs=[chatbot, paper_details_state, model_dropdown, mcq_state, mcq1, mcq2, mcq3, user_id_state, user_name_state, user_email_state],
+            inputs=[chatbot, paper_details_state, model_dropdown, mcq_state, mcq1, mcq2, mcq3, user_id_state, user_name_state, user_email_state, age_state, gender_state, degree_state, papers_read_state, comfort_state],
             outputs=[chatbot, paper_details_state, mcq_state, mcq1, mcq2, mcq3, submit_answers_button, user_id_state, user_name_state, user_email_state, proceed_button]
         )
 
