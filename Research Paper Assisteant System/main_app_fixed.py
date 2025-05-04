@@ -676,6 +676,21 @@ pre {
     text-align: center !important;
 }
 """
+def update_countdown(seconds_remaining):
+    """
+    Given how many seconds are left, format “M:SS” and tick down by one.
+    """
+    m, s = divmod(seconds_remaining, 60)
+    return f"{m}:{s:02d}", seconds_remaining - 1
+
+# show_quiz already defined:
+# def show_quiz():
+#     return gr.update(visible=False), gr.update(visible=True)
+
+# ── right before def create_interface():
+def show_quiz():
+    # hide the learning/practice group, show the quiz group
+    return gr.update(visible=False), gr.update(visible=True)
 
 def create_interface():
     # Create the Gradio interface with the exact same UI as the original
@@ -742,13 +757,44 @@ def create_interface():
                     
                     
                     # MCQ interface
-                    with gr.Group():
+                    with gr.Group() as learning_group:
                         mcq1 = gr.Radio(label="Question 1", choices=[], visible=True, elem_classes=["options-radio"])
                         mcq2 = gr.Radio(label="Question 2", choices=[], visible=True, elem_classes=["options-radio"])
                         mcq3 = gr.Radio(label="Question 3", choices=[], visible=True, elem_classes=["options-radio"])
                         
                         with gr.Row():
                             submit_answers_button = gr.Button("Submit Answers", interactive=False)
+           
+                        # ── Proceed early button
+                        proceed_button = gr.Button("Proceed to Quiz")
+
+                        # ── Countdown display and internal state
+                        timer_display = gr.Textbox(
+                            label="Time until full quiz", 
+                            value="10:00", 
+                            interactive=False
+                        )
+                        time_state = gr.State(600)  # 600 seconds = 10 minutes
+
+                        # ── Two timers:
+                        #   * countdown_timer fires every second to update timer_display
+                        #   * quiz_timer fires once at 600s to flip into the quiz
+                        countdown_timer = gr.Timer(value=1.0, active=True, render=True)
+                        quiz_timer      = gr.Timer(value=600.0, active=True, render=True)
+                     # ── full 5‑question quiz screen (hidden by default)
+                    with gr.Group(visible=False) as quiz_group:
+                        gr.Markdown("## Take the Full Quiz")
+                        q1 = gr.Radio(
+                            choices=["A. …","B. …","C. …","D. …"], 
+                            label="1. Placeholder Question", 
+                            visible=True,
+                            elem_classes=["options-radio"]
+                        )
+                        q2 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="2. …", elem_classes=["options-radio"])
+                        q3 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="3. …", elem_classes=["options-radio"])
+                        q4 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="4. …", elem_classes=["options-radio"])
+                        q5 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="5. …", elem_classes=["options-radio"])
+                        submit_quiz = gr.Button("Submit Quiz")
             
         
         # Event handlers - EXACT MATCH to original event handlers
@@ -774,8 +820,29 @@ def create_interface():
         submit_answers_button.click(
             fn=submit_mcq_answers,
             inputs=[chatbot, paper_details_state, model_dropdown, mcq_state, mcq1, mcq2, mcq3, user_id_state, user_name_state, user_email_state],
-            outputs=[chatbot, paper_details_state, mcq_state, mcq1, mcq2, mcq3, submit_answers_button, user_id_state, user_name_state, user_email_state]
+            outputs=[chatbot, paper_details_state, mcq_state, mcq1, mcq2, mcq3, submit_answers_button, user_id_state, user_name_state, user_email_state, proceed_button]
         )
+
+        proceed_button.click(
+            fn=show_quiz,
+            inputs=[],
+            outputs=[learning_group, quiz_group]
+        )
+
+        # every second, decrement the counter
+        countdown_timer.tick(
+            fn=update_countdown,
+            inputs=[time_state],
+            outputs=[timer_display, time_state]
+        )
+
+        # once after 10 minutes, auto‑swap screens
+        quiz_timer.tick(
+            fn=show_quiz,
+            inputs=[],
+            outputs=[learning_group, quiz_group]
+        )
+
         
         # Warm up the model when the app starts
         demo.load(fn=lambda: warm_up_model(model_name="gemma3:1b"))

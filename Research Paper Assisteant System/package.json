@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@mermaid-js/mermaid-cli": "^11.4.2",
+    "playwright": "^1.52.0"
+  }
+}
