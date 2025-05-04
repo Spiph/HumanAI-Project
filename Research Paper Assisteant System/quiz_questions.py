@@ -1,7 +1,7 @@
 # quiz_questions.py
 
 PAPER_QUIZ = {
-    "Are You the Main Character? Visibility Labor and Attributional Practices on TikTok": [
+    "Losh - 2023 - Are You the Main Character Visibility Labor and Attributional Practices on TikTok": [
         {
             "question": "Which three explanatory frameworks does Losh integrate in this paper?",
             "choices": [
@@ -49,7 +49,7 @@ PAPER_QUIZ = {
         },
     ],
 
-    "Effects of the Spiral of Silence on Minority Groups in Recommender Systems": [
+    "Khan and Herder - 2023 - Effects of the spiral of silence on minority groups in recommender systems": [
         {
             "question": "What primary theoretical phenomenon does the paper examine as contributing to minority underrepresentation in recommender systems?",
             "choices": [
@@ -97,7 +97,7 @@ PAPER_QUIZ = {
         },
     ],
 
-    "Profiling Fake News Spreaders on Social Media through Psychological and Motivational Factors": [
+    "Karami et al. - 2021 - Profiling Fake News Spreaders on Social Media through Psychological and Motivational Factors": [
         {
             "question": "Which tool did the authors use to extract psychologically‐relevant word categories (e.g., anxiety, tentativeness) from users’ tweets?",
             "choices": [
@@ -145,7 +145,7 @@ PAPER_QUIZ = {
         },
     ],
 
-    "Emotional Hermeneutics. Exploring the Limits of Artificial Intelligence from a Diltheyan Perspective": [
+    "Picca - 2024 - Emotional Hermeneutics. Exploring the Limits of Artificial Intelligence from a Diltheyan Perspective": [
         {
             "question": "According to Picca’s summary of Dilthey’s hermeneutics, “understanding” in the human sciences is characterized by:",
             "choices": [
@@ -193,8 +193,7 @@ PAPER_QUIZ = {
         },
     ],
 
-    "Exercises in Unimaginativeness: Case Study of GPT-Based Translation and Travesty of Alfred Jarry's \"Ubu King\"": [
-        {
+    "Argasiński and Marecki - 2024 - Exercises in unimaginativeness. Case study of GPT based translation and travesty of Alfred Jarry's \"Ubu King\"": [        {
             "question": "What theoretical notion does “uncreative writing” emphasize in Argasiński & Marecki’s case study?",
             "choices": [
                 ("Generating entirely novel text from scratch", False),

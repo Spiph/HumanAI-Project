@@ -296,42 +296,67 @@ def generate_new_mcqs(chatbot, paper_details, model_name, mcq_state):
     
     yield chatbot, new_mcq_state
 
-# Function to save user session data
-def save_user_session(user_id, name, email, chat_history, mcq_data):
+# Function to save user session data, now extended with quiz info
+def save_user_session(
+    user_id: str,
+    name: str,
+    email: str,
+    chat_history: list,
+    mcq_data: dict,
+    *,
+    selected_paper: str = None,
+    quiz_start: datetime.datetime = None,
+    quiz_end: datetime.datetime = None,
+    quiz_answers: list[str] = None,
+    quiz_grade: int = None,
+):
+    """
+    Saves everything about this user’s session, including:
+      - chat_history (list of tuples)
+      - mcq_data (your existing MCQ state)
+      - selected_paper: the title pulled from pdf_dropdown
+      - quiz_start / quiz_end: datetime stamps
+      - quiz_answers: list of the five answer strings
+      - quiz_grade: integer score 0–5
+    """
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     user_dir = os.path.join(USER_DATA_DIR, user_id)
     os.makedirs(user_dir, exist_ok=True)
-    
-    # Save session info
     session_file = os.path.join(user_dir, f"session_{timestamp}.json")
-    
-    # Convert chat history to a serializable format if needed
+
+    # Serialize chat_history
     serializable_chat_history = []
     for msg in chat_history:
-        if isinstance(msg, tuple) or isinstance(msg, list):
-            # Convert tuple/list to a serializable format
-            if len(msg) == 2:
-                serializable_chat_history.append({"user": msg[0], "assistant": msg[1]})
-            else:
-                serializable_chat_history.append({"content": str(msg)})
+        if isinstance(msg, (tuple, list)) and len(msg) == 2:
+            serializable_chat_history.append({"user": msg[0], "assistant": msg[1]})
         elif isinstance(msg, dict):
             serializable_chat_history.append(msg)
         else:
             serializable_chat_history.append({"content": str(msg)})
-    
+
+    # Build session dictionary
     session_data = {
         "user_id": user_id,
         "name": name,
         "email": email,
-        "timestamp": timestamp,
+        "session_timestamp": timestamp,
+        "selected_paper": selected_paper,
         "chat_history": serializable_chat_history,
-        "mcq_data": mcq_data
+        "mcq_data": mcq_data,
+        "quiz": {
+            "start_time": quiz_start.isoformat() if quiz_start else None,
+            "end_time":   quiz_end.isoformat()   if quiz_end   else None,
+            "answers":    quiz_answers            if quiz_answers else [],
+            "grade":      quiz_grade              if quiz_grade is not None else None,
+        },
     }
-    
+
+    # Write to disk
     with open(session_file, "w") as f:
         json.dump(session_data, f, indent=2)
-    
+
     return session_file
+
 
 # Function to handle PDF upload, summarization, and automatic MCQ generation
 def auto_summarize_with_mcqs(file, model_name,
@@ -620,24 +645,29 @@ def show_quiz():
     # hide the learning/practice group, show the quiz group
     return gr.update(visible=False), gr.update(visible=True)
 
-def load_quiz_questions(selected_title):
-    """
-    Given a paper title, return exactly five gr.update(...) for q1–q5,
-    setting label, choices, and resetting value.
-    If fewer than five questions exist, hide the extra components.
-    """
-    questions = PAPER_QUIZ.get(selected_title, [])
+def basename_without_ext(path: str) -> str:
+    # e.g. path="Losh - 2023 - Are You… .pdf"
+    base = os.path.basename(path)
+    return os.path.splitext(base)[0]
+
+def load_quiz_questions(selected_pdf_filename):
+    title = basename_without_ext(selected_pdf_filename)
+    questions = PAPER_QUIZ.get(title, [])
     updates = []
     for i in range(5):
         if i < len(questions):
             q = questions[i]
-            opts = [text for (text, correct) in q["choices"]]
+            opts = [text for (text, ok) in q["choices"]]
             updates.append(
-                gr.update(label=f"{i+1}. {q['question']}", choices=opts, value=None, visible=True)
+                gr.update(label=f"{i+1}. {q['question']}",
+                          choices=opts,
+                          value=None,
+                          visible=True)
             )
         else:
             updates.append(gr.update(visible=False))
     return updates
+
 
 def grade_full_quiz(selected_title, a1, a2, a3, a4, a5):
     """
@@ -762,7 +792,7 @@ def create_interface():
                         quiz_submit_timer    = gr.Timer(value=300.0, active=False, render=True)
 
                         # ── 5‑minute timer display & state
-                        quiz_timer_display = gr.Textbox(label="Time remaining", value="5:00", interactive=False)
+                        quiz_timer_display = gr.Textbox(label="Quiz time remaining", value="5:00", interactive=False)
                         quiz_time_state   = gr.State(300)   # 300 seconds = 5 minutes
 
                         gr.Markdown("## Take the Full Quiz")
