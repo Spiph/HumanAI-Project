@@ -595,15 +595,65 @@ def submit_mcq_answers(chatbot, paper_details, model_name, mcq_state, mcq1_answe
                 )
 
 # Function to handle user registration and start the session
-def register_user(name, email):
-    if not name or not email:
-        return gr.update(visible=True), gr.update(visible=False), "", "", "", "Please enter both name and email to continue."
-    
-    # Generate a unique user ID
+def register_user(name, email, age, gender, degree, papers_read, comfort, consent):
+    # If any required field is missing, stay on registration page
+    if not name or not email or not consent:
+        return (
+            # 1) home_page visible again
+            gr.update(visible=True),
+            # 2) main_interface hidden
+            gr.update(visible=False),
+            # 3) user_id_state
+            "",
+            # 4) user_name_state
+            "",
+            # 5) user_email_state
+            "",
+            # 6) age_state
+            "",
+            # 7) gender_state
+            "",
+            # 8) degree_state
+            "",
+            # 9) papers_read_state
+            "",
+            # 10) comfort_state
+            3,  # or "" if you prefer
+            # 11) registration_error
+            "Please enter name, email, and consent to continue.",
+            # 12) consent_state
+            False
+        )
+
+    # All good: register the user
     user_id = str(uuid.uuid4())
-    
-    # Return values to show the main interface and hide the registration form
-    return gr.update(visible=False), gr.update(visible=True), user_id, name, email, ""
+    return (
+        # 1) hide registration
+        gr.update(visible=False),
+        # 2) show main interface
+        gr.update(visible=True),
+        # 3) user_id_state
+        user_id,
+        # 4) user_name_state
+        name,
+        # 5) user_email_state
+        email,
+        # 6) age_state
+        age,
+        # 7) gender_state
+        gender,
+        # 8) degree_state
+        degree,
+        # 9) papers_read_state
+        papers_read,
+        # 10) comfort_state
+        comfort,
+        # 11) registration_error
+        "",
+        # 12) consent_state
+        True
+    )
+
 
 # Warm up the model when the app starts
 def warm_up_model(model_name="gemma3:1b"):
@@ -715,6 +765,7 @@ def create_interface():
         degree_state        = gr.State("")
         papers_read_state   = gr.State("")
         comfort_state       = gr.State(3)   # default midpoint
+        consent_state       = gr.State(False)
 
         # Research assistant states
         paper_details_state = gr.State("")  # Persistent state for the paper details (replaces summary_state)
@@ -766,6 +817,18 @@ def create_interface():
                     comfort_input = gr.Slider(
                         label="Comfort reading academic papers (1–5)",
                         minimum=1, maximum=5, step=1, value=3
+                    )
+
+                    # 📄 Link to open/download the consent PDF
+                    consent_pdf = gr.File(
+                        value="Ngoc_online_consent_April2025.pdf",
+                        label="Online Consent Form (click to view/download)",
+                        interactive=False
+                    )
+                    
+                    consent_input = gr.Checkbox(
+                        label="I have read the Online Consent Form and consent to this study",
+                        value=False
                     )
 
                     # register_button = gr.Button("Start Learning")
@@ -833,8 +896,8 @@ def create_interface():
                         # ── Two timers:
                         #   * countdown_timer fires every second to update timer_display
                         #   * quiz_timer fires once at 600s to flip into the quiz
-                        countdown_timer = gr.Timer(value=1.0, active=True, render=True)
-                        quiz_timer      = gr.Timer(value=600.0, active=True, render=True)
+                        countdown_timer = gr.Timer(value=1.0, active=False, render=True)
+                        quiz_timer      = gr.Timer(value=600.0, active=False, render=True)
                      # ── full 5‑question quiz screen (hidden by default)
                     with gr.Group(visible=False) as quiz_group:
                         # ── countdown every second, and one‐shot at 5 minutes
@@ -858,28 +921,6 @@ def create_interface():
                         q5 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="5. …", elem_classes=["options-radio"])
                         submit_quiz = gr.Button("Submit Quiz")
 
-                        
-            
-        
-        # Event handlers - EXACT MATCH to original event handlers
-        def register_user(name, email, age, gender, degree, papers_read, comfort):
-            # only name & email required
-            if not name or not email:
-                return (
-                    gr.update(visible=True),
-                    gr.update(visible=False),
-                    "", "", "", "", "", "", "Please enter both name and email to continue."
-                )
-            user_id = str(uuid.uuid4())
-            # store optional survey answers in State
-            return (
-                gr.update(visible=False),   # hide registration
-                gr.update(visible=True),    # show main interface
-                user_id, name, email,
-                age, gender, degree,
-                papers_read, comfort,
-                ""
-            )
         
         register_button.click(
             fn=register_user,
@@ -887,18 +928,22 @@ def create_interface():
                 name_input, email_input,
                 age_input, gender_input,
                 degree_input, papers_read_input,
-                comfort_input
+                comfort_input, consent_input
             ],
             outputs=[
                 home_page, main_interface,
                 user_id_state, user_name_state, user_email_state,
                 age_state, gender_state, degree_state,
                 papers_read_state, comfort_state,
-                registration_error
+                registration_error, consent_state
             ]
         )
 
-
+        register_button.click(
+            fn=lambda: (gr.update(active=True), gr.update(active=True)),
+            inputs=[],
+            outputs=[countdown_timer, quiz_timer]
+        )
 
         pdf_dropdown.change(
             fn=lambda title: (
