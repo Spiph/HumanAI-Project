@@ -61,8 +61,8 @@ def make_mermaid_diagram(extracted_info: dict[str, list[dict]], output_file=None
         output_file = f"diagram_{os.getpid()}_{os.urandom(4).hex()}.png"
 
     try:
-        mmdc_path = r"C:\\Users\\canno\\AppData\\Roaming\\npm\\mmdc.cmd"
-        # mmdc_path = "mmdc"
+        # mmdc_path = r"C:\\Users\\canno\\AppData\\Roaming\\npm\\mmdc.cmd"
+        mmdc_path = "mmdc"
         subprocess.run([
             mmdc_path, "-i", mmd_path, "-o", output_file,
             "--configFile", "theme.json",
@@ -378,7 +378,7 @@ def auto_summarize_with_mcqs(file, model_name,
             chat, details_state, mcq_state_val,
             mcq1_upd, mcq2_upd, mcq3_upd,
             submit_upd,
-            user_id, name, email, age, gender, degree, papers_read, comfort
+            user_id, name, email
         )
 
     if not file:
@@ -427,7 +427,7 @@ def auto_summarize_with_mcqs(file, model_name,
     radio_choices = [[f"{opt}. {txt}" for opt, txt in sorted(m["options"].items())] for m in mcqs]
     # Save session data
     if user_id and name and email:
-        save_user_session(user_id, name, email, comfort, paper_details, new_mcq_state, age, gender, degree, papers_read)
+        save_user_session(user_id, name, email, paper_details, new_mcq_state, age=age, gender=gender, degree=degree, papers_read=papers_read, comfort=comfort)
 
     yield make_out(chat, paper_details, new_mcq_state,
                    gr.update(label=f"Question 1: {mcqs[0]['question']}", choices=radio_choices[0], visible=True),
@@ -504,7 +504,7 @@ def submit_mcq_answers(chatbot, paper_details, model_name, mcq_state, mcq1_answe
   
     # Save session data
     if user_id and name and email:
-        save_user_session(user_id, name, email, chatbot, mcq_state, age, gender, degree, papers_read, comfort)
+        save_user_session(user_id, name, email, chatbot, mcq_state, age=age, gender=gender, degree=degree, papers_read=papers_read, comfort=comfort)
 
     # If there are incorrect answers, store them in the MCQ state for sequential processing
     if incorrect_indices:
@@ -768,8 +768,8 @@ def create_interface():
                         minimum=1, maximum=5, step=1, value=3
                     )
 
-                    register_button = gr.Button("Start Learning")
-                    registration_error = gr.Textbox(label="", visible=True)
+                    # register_button = gr.Button("Start Learning")
+                    # registration_error = gr.Textbox(label="", visible=True)
                 with gr.Column(scale=1):
                     pass
                     register_button = gr.Button("Start Learning")
@@ -935,7 +935,7 @@ def create_interface():
         submit_answers_button.click(
             fn=submit_mcq_answers,
             inputs=[chatbot, paper_details_state, model_dropdown, mcq_state, mcq1, mcq2, mcq3, user_id_state, user_name_state, user_email_state, age_state, gender_state, degree_state, papers_read_state, comfort_state],
-            outputs=[chatbot, paper_details_state, mcq_state, mcq1, mcq2, mcq3, submit_answers_button, user_id_state, user_name_state, user_email_state, proceed_button]
+            outputs=[chatbot, paper_details_state, mcq_state, mcq1, mcq2, mcq3, submit_answers_button, user_id_state, user_name_state, user_email_state]
         )
 
         proceed_button.click(
