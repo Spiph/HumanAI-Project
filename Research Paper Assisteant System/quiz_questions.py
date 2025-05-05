@@ -193,7 +193,7 @@ PAPER_QUIZ = {
         },
     ],
 
-    "Argasiński and Marecki - 2024 - Exercises in unimaginativeness. Case study of GPT based translation and travesty of Alfred Jarry's \"Ubu King\"": [        {
+    "Argasiński and Marecki - 2024 - Exercises in unimaginativeness. Case study of GPT based translation and travesty of Alfred Jarry's Ubu King": [        {
             "question": "What theoretical notion does “uncreative writing” emphasize in Argasiński & Marecki’s case study?",
             "choices": [
                 ("Generating entirely novel text from scratch", False),
