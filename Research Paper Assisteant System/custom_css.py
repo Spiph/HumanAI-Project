@@ -95,4 +95,8 @@ pre {
     margin: 0 auto !important;
     text-align: center !important;
 }
+.inline-radio .gr-radio-row {
+  display: inline-block !important;
+  margin-right: 12px !important;
+}
 """

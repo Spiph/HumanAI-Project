@@ -750,6 +750,14 @@ def grade_full_quiz(selected_title, a1, a2, a3, a4, a5):
     # Chatbot wants a list of (user, assistant)
     return [("", msg)]
 
+def save_feedback(
+    user_id,   # from your user_id_state
+    fb1, fb2, fb3, fb4, fb5, fb6, fb7, fb8, fb9, pref,
+):
+    # call your save_user_session or append to the existing file
+    # e.g. load the latest session_{timestamp}.json, add a "feedback" key, then rewrite it.
+    # This stub just returns a confirmation in the chatbot
+    return [("", "Thanks for your feedback!")]
 
 def create_interface():
     # Create the Gradio interface with the exact same UI as the original
@@ -899,6 +907,10 @@ def create_interface():
                         countdown_timer = gr.Timer(value=1.0, active=False, render=True)
                         quiz_timer      = gr.Timer(value=600.0, active=False, render=True)
                      # ── full 5‑question quiz screen (hidden by default)
+
+                    # ───────────────────────────────────────────
+                    # Quiz SCREEN (hidden until timer counts down)
+                    # ───────────────────────────────────────────
                     with gr.Group(visible=False) as quiz_group:
                         # ── countdown every second, and one‐shot at 5 minutes
                         quiz_countdown_timer = gr.Timer(value=1.0, active=False, render=True)
@@ -921,6 +933,28 @@ def create_interface():
                         q5 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="5. …", elem_classes=["options-radio"])
                         submit_quiz = gr.Button("Submit Quiz")
 
+                    # ───────────────────────────────────────────
+                    # FEEDBACK SCREEN (hidden until quiz is done)
+                    # ───────────────────────────────────────────
+                    with gr.Group(visible=False) as feedback_group:
+                        gr.Markdown("## We’d love your feedback!")
+                        common_opts = ["1 – Strongly Disagree", "2", "3", "4", "5 – Strongly Agree"]
+
+                        future_use     = gr.Radio(choices=common_opts, label="I would like to use this system frequently.",                             value="3", elem_classes=["inline-radio"])
+                        trust          = gr.Radio(choices=common_opts, label="I trust the system’s workflow…",                                           value="3", elem_classes=["inline-radio"])
+                        mental         = gr.Radio(choices=common_opts, label="I found the reading comprehension task challenging to understand.",       value="3", elem_classes=["inline-radio"])
+                        complexity     = gr.Radio(choices=common_opts, label="I found the system to be complex and challenging to use.",               value="3", elem_classes=["inline-radio"])
+                        usefulness_1   = gr.Radio(choices=common_opts, label="The system helped me understand relationships between terms and concepts.", value="3", elem_classes=["inline-radio"])
+                        usefulness_2   = gr.Radio(choices=common_opts, label="The system helped me consolidate and track information I gained.",       value="3", elem_classes=["inline-radio"])
+                        usefulness_3   = gr.Radio(choices=common_opts, label="The system helped me navigate the paper by highlighting key sections…",  value="3", elem_classes=["inline-radio"])
+                        satisfaction_1 = gr.Radio(choices=common_opts, label="I am satisfied with how clearly the paper summary was presented.",        value="3", elem_classes=["inline-radio"])
+                        satisfaction_2 = gr.Radio(choices=common_opts, label="I found using the system engaging.",                                      value="3", elem_classes=["inline-radio"])
+                        preference     = gr.Radio(
+                                            choices=["AI Tutor (summary + practice questions)", "Free‑chat exploration"],
+                                            label="Which system do you prefer?",
+                                            value=None, elem_classes=["inline-radio"]
+                                        )
+                        submit_feedback = gr.Button("Submit Feedback")
         
         register_button.click(
             fn=register_user,
@@ -938,7 +972,6 @@ def create_interface():
                 registration_error, consent_state
             ]
         )
-
         register_button.click(
             fn=lambda: (gr.update(active=True), gr.update(active=True)),
             inputs=[],
@@ -1009,11 +1042,18 @@ def create_interface():
             inputs=[quiz_time_state],
             outputs=[quiz_timer_display, quiz_time_state]
         )
-        # manual click → simple grade
+
+        # 1) Grade quiz (if you still need to score—but no UI change)
         submit_quiz.click(
             fn=grade_full_quiz,
             inputs=[pdf_dropdown, q1, q2, q3, q4, q5],
             outputs=[chatbot]
+        )
+        # 2) Then show feedback (swap pages)
+        submit_quiz.click(
+            fn=lambda: (gr.update(visible=False), gr.update(visible=True)),
+            inputs=[],
+            outputs=[quiz_group, feedback_group]
         )
 
         # auto on timeout → same grade
@@ -1022,6 +1062,19 @@ def create_interface():
             inputs=[pdf_dropdown, q1, q2, q3, q4, q5],
             outputs=[chatbot]
         )
+
+        submit_feedback.click(
+            fn=save_feedback,
+            inputs=[
+                user_id_state,
+                future_use, trust, mental, complexity,
+                usefulness_1, usefulness_2, usefulness_3,
+                satisfaction_1, satisfaction_2,
+                preference
+            ],
+            outputs=[chatbot]
+        )
+
         
         # Warm up the model when the app starts
         demo.load(fn=lambda: warm_up_model(model_name="gemma3:1b"))
