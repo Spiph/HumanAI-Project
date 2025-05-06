@@ -10,10 +10,7 @@ import os
 import datetime
 import uuid
 import json
-import threading
-import random
-from collections import defaultdict, OrderedDict
-import base64, zlib
+import base64
 
 from custom_css import CUSTOM_CSS
 from quiz_questions import PAPER_QUIZ
@@ -29,10 +26,25 @@ from mcq_generator import (
     create_default_mcq, extract_explanation_information
 )
 
-import requests
 import tempfile
 import subprocess
-import base64, zlib
+import base64
+import random
+
+# Map each PDF filename (basename without extension) to its ChatGPT share URL
+PAPER_GPT_LINKS = {
+    "Karami et al. - 2021 - Profiling Fake News Spreaders on Social Media through Psychological and Motivational Factors.pdf":
+        "https://chatgpt.com/share/6818b7d7-fe60-8008-a266-9e6475563b37",
+    "Picca - 2024 - Emotional Hermeneutics. Exploring the Limits of Artificial Intelligence from a Diltheyan Perspective.pdf":
+        "https://chatgpt.com/share/6818b813-7bbc-8008-8fea-e742e0a28831",
+    "Losh - 2023 - Are You the Main Character Visibility Labor and Attributional Practices on TikTok.pdf":
+        "https://chatgpt.com/share/6818b872-4d30-8008-b469-d5ae4c008a7d",
+    "Argasiński and Marecki - 2024 - Exercises in unimaginativeness. Case study of GPT based translation and travesty of Alfred Jarry's Ubu King.pdf":
+        "https://chatgpt.com/share/6818b8a2-390c-8008-820e-30e7af3b7d58",
+    "Khan and Herder - 2023 - Effects of the spiral of silence on minority groups in recommender systems.pdf":
+        "https://chatgpt.com/share/6818b8bb-40a0-8008-bb27-ab90e5642c40"
+}
+
 
 # Directory to store user data
 USER_DATA_DIR = "./user_data"
@@ -594,67 +606,6 @@ def submit_mcq_answers(chatbot, paper_details, model_name, mcq_state, mcq1_answe
                     email  # User email
                 )
 
-# Function to handle user registration and start the session
-def register_user(name, email, age, gender, degree, papers_read, comfort, consent):
-    # If any required field is missing, stay on registration page
-    if not name or not email or not consent:
-        return (
-            # 1) home_page visible again
-            gr.update(visible=True),
-            # 2) main_interface hidden
-            gr.update(visible=False),
-            # 3) user_id_state
-            "",
-            # 4) user_name_state
-            "",
-            # 5) user_email_state
-            "",
-            # 6) age_state
-            "",
-            # 7) gender_state
-            "",
-            # 8) degree_state
-            "",
-            # 9) papers_read_state
-            "",
-            # 10) comfort_state
-            3,  # or "" if you prefer
-            # 11) registration_error
-            "Please enter name, email, and consent to continue.",
-            # 12) consent_state
-            False
-        )
-
-    # All good: register the user
-    user_id = str(uuid.uuid4())
-    return (
-        # 1) hide registration
-        gr.update(visible=False),
-        # 2) show main interface
-        gr.update(visible=True),
-        # 3) user_id_state
-        user_id,
-        # 4) user_name_state
-        name,
-        # 5) user_email_state
-        email,
-        # 6) age_state
-        age,
-        # 7) gender_state
-        gender,
-        # 8) degree_state
-        degree,
-        # 9) papers_read_state
-        papers_read,
-        # 10) comfort_state
-        comfort,
-        # 11) registration_error
-        "",
-        # 12) consent_state
-        True
-    )
-
-
 # Warm up the model when the app starts
 def warm_up_model(model_name="gemma3:1b"):
     try:
@@ -730,8 +681,16 @@ def load_quiz_questions(selected_pdf_filename):
             updates.append(gr.update(visible=False))
     return updates
 
+# ── helper to show ChatGPT practice and populate the link ──
+def show_chatgpt_practice(gpt_link):
+    print(f"showing gpt practice (arm {arm})")
+    return (
+        gr.update(visible=False),   # hide main_interface
+        gr.update(visible=True),    # show chatgpt_practice_group
+        f"[Open ChatGPT session here]({gpt_link})"
+    )
 
-def grade_full_quiz(selected_title, a1, a2, a3, a4, a5):
+def grade_full_quiz(arm_state, selected_title, a1, a2, a3, a4, a5):
     """
     Simple grader: counts how many of the five answers match PAPER_QUIZ[selected_title].
     Returns a single chat message.
@@ -747,7 +706,10 @@ def grade_full_quiz(selected_title, a1, a2, a3, a4, a5):
 
     total = len(questions)
     msg = f"📝 You scored {correct}/{total} correct."
+    print(msg)
     # Chatbot wants a list of (user, assistant)
+    if arm_state == "A":
+        show_chatgpt_practice()
     return [("", msg)]
 
 def save_feedback(
@@ -758,6 +720,89 @@ def save_feedback(
     # e.g. load the latest session_{timestamp}.json, add a "feedback" key, then rewrite it.
     # This stub just returns a confirmation in the chatbot
     return [("", "Thanks for your feedback!")]
+
+def register_user(name, email,
+                  age, gender, degree,
+                  papers_read, comfort, consent):
+    # 1) validate
+    if not name or not email or not consent:
+        return (
+            gr.update(visible=True),   # show registration
+            gr.update(visible=False),  # hide main UI
+            "", "", "", "", "", "", "", "",  # clear all states
+            "",       # registration_error
+            False,    # consent_state
+            "", "", "",  # arm_state, system_paper_state, gpt_paper_state
+            gr.update(value="", visible=False)  # instructions_md
+        )
+    # 2) generate user ID
+    user_id = str(uuid.uuid4())
+    # 3) counterbalance arm
+    arm = random.choice(["A", "B"])
+    print(f"Arm {arm} is selected")
+    # 4) random paper pairing
+    pdfs = list_pdfs()
+    system_pdf, gpt_pdf = random.sample(pdfs, 2)
+    # 5) instruction banner
+    is_arm_a = (arm == "A")
+    instr = "You will start with our System, then switch to ChatGPT." if is_arm_a \
+            else "You will start with ChatGPT, then switch to our System."
+
+    gpt_link = PAPER_GPT_LINKS[gpt_pdf]
+    # 6) return all outputs
+    return (
+        gr.update(visible=False),               # home_page
+        gr.update(visible=is_arm_a),            # main_interface
+        gr.update(visible=not is_arm_a),        # chatgpt_practice_group
+        gr.update(visible=False),               # chatgpt_quiz_group
+        user_id, name, email,                   # user_id_state, user_name_state, user_email_state
+        age, gender, degree,                    # age_state, gender_state, degree_state
+        papers_read, comfort,                   # papers_read_state, comfort_state
+        "", True,                               # registration_error, consent_state
+        arm, system_pdf, gpt_pdf,               # arm_state, system_paper_state, gpt_paper_state
+        gr.update(value=instr, visible=True),   # instructions_md
+        gpt_link,                               # gpt_link_state
+        gr.update(value=system_pdf),            # pdf_dropdown
+        gr.update(value=os.path.join("pdf", system_pdf)),  # file_upload
+
+        # now initialize q1..q5
+        gr.update(visible=False),  # q1
+        gr.update(visible=False),  # q2
+        gr.update(visible=False),  # q3
+        gr.update(visible=False),  # q4
+        gr.update(visible=False),  # q5
+    )
+
+# helper to initialize the ChatGPT practice pane and preload questions
+def init_chatgpt_practice(arm, gpt_pdf, gpt_link):
+    print(f"starting chatgpt practice (arm {arm})")
+    # arm == "A" → start with our system
+    # arm == "B" → start with ChatGPT first
+    show_system = gr.update(visible=(arm=="A"))
+    show_practice = gr.update(visible=(arm=="B"))
+    # render the ChatGPT share URL
+    link_md = f"[▶ Open ChatGPT practice session here]({gpt_link})"
+    # preload questions from your PAPER_QUIZ dict
+    q_updates = load_quiz_questions(gpt_pdf)
+    return (
+        show_system,
+        show_practice,
+        link_md,
+        *q_updates  # expands into the five q1…q5 updates
+    )   
+
+# when the practice timer elapses, auto‐hand off into the GPT quiz
+def launch_gpt_quiz(gpt_pdf):
+    print(f"launch chatgpt quiz (arm {arm})")
+    hide_practice = gr.update(visible=False)
+    show_quiz    = gr.update(visible=True)
+    # preload the same questions into gq1…gq5
+    q_updates = load_quiz_questions(gpt_pdf)
+    return (
+        hide_practice,
+        show_quiz,
+        *q_updates
+    )
 
 def create_interface():
     # Create the Gradio interface with the exact same UI as the original
@@ -775,6 +820,13 @@ def create_interface():
         comfort_state       = gr.State(3)   # default midpoint
         consent_state       = gr.State(False)
 
+        # NEW: counterbalance & paper assignment states
+        arm_state            = gr.State("")
+        system_paper_state   = gr.State("")
+        gpt_paper_state      = gr.State("")
+        instructions_md      = gr.Markdown("", visible=False)
+        gpt_link_state        = gr.State("")
+
         # Research assistant states
         paper_details_state = gr.State("")  # Persistent state for the paper details (replaces summary_state)
         mcq_state = gr.State(None)  # Persistent state for MCQs
@@ -787,15 +839,7 @@ def create_interface():
             Welcome to the Research Paper Learning Assistant! This system helps you understand research papers through interactive learning.
             """, elem_classes=["home-container"])
             
-            gr.Markdown("""
-            ## Features:
-            
-            - Upload any research paper PDF
-            - Get a visual architectural diagram of the paper's framework
-            - Test your understanding with automatically generated MCQs
-            - Receive visual explanations for incorrect answers
-            - Track your learning progress
-            """, elem_classes=["feature-list"])
+            instructions_md
             
             with gr.Row():
                 with gr.Column(scale=1):
@@ -843,7 +887,7 @@ def create_interface():
                     # registration_error = gr.Textbox(label="", visible=True)
                 with gr.Column(scale=1):
                     pass
-                    register_button = gr.Button("Start Learning")
+                    register_button = gr.Button("Start Learning", elem_id="register_button")
                     registration_error = gr.Textbox(label="", visible=True)
                 with gr.Column(scale=1):
                     pass
@@ -891,21 +935,28 @@ def create_interface():
                             submit_answers_button = gr.Button("Submit Answers", interactive=False)
            
                         # ── Proceed early button
-                        proceed_button = gr.Button("Proceed to Quiz")
+                        proceed_button = gr.Button("Proceed to Quiz", elem_id="proceed_button")
+                        # static placeholder; JS will drive its contents when the pane is shown
+                        timer_html = gr.HTML("""
+                            <div style='font-size:14px; margin-top:4px;'>
+                            Time until full quiz: <span id='countdown_timer'>10:00</span>
+                            </div>
+                        """)
 
-                        # ── Countdown display and internal state
-                        timer_display = gr.Textbox(
-                            label="Time until full quiz", 
-                            value="10:00", 
-                            interactive=False
-                        )
-                        time_state = gr.State(600)  # 600 seconds = 10 minutes
+
+                        # # ── Countdown display and internal state
+                        # timer_display = gr.Textbox(
+                        #     label="Time until full quiz", 
+                        #     value="10:00", 
+                        #     interactive=False
+                        # )
+                        # time_state = gr.State(600)  # 600 seconds = 10 minutes
 
                         # ── Two timers:
                         #   * countdown_timer fires every second to update timer_display
                         #   * quiz_timer fires once at 600s to flip into the quiz
-                        countdown_timer = gr.Timer(value=1.0, active=False, render=True)
-                        quiz_timer      = gr.Timer(value=600.0, active=False, render=True)
+                        # countdown_timer = gr.Timer(value=1.0, active=False, render=True)
+                        # quiz_timer      = gr.Timer(value=600.0, active=False, render=True)
                      # ── full 5‑question quiz screen (hidden by default)
 
                     # ───────────────────────────────────────────
@@ -913,12 +964,12 @@ def create_interface():
                     # ───────────────────────────────────────────
                     with gr.Group(visible=False) as quiz_group:
                         # ── countdown every second, and one‐shot at 5 minutes
-                        quiz_countdown_timer = gr.Timer(value=1.0, active=False, render=True)
-                        quiz_submit_timer    = gr.Timer(value=300.0, active=False, render=True)
+                        # quiz_countdown_timer = gr.Timer(value=1.0, active=False, render=True)
+                        # quiz_submit_timer    = gr.Timer(value=300.0, active=False, render=True)
 
                         # ── 5‑minute timer display & state
-                        quiz_timer_display = gr.Textbox(label="Quiz time remaining", value="5:00", interactive=False)
-                        quiz_time_state   = gr.State(300)   # 300 seconds = 5 minutes
+                        # quiz_timer_display = gr.Textbox(label="Quiz time remaining", value="5:00", interactive=False)
+                        # quiz_time_state   = gr.State(300)   # 300 seconds = 5 minutes
 
                         gr.Markdown("## Take the Full Quiz")
                         q1 = gr.Radio(
@@ -931,7 +982,48 @@ def create_interface():
                         q3 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="3. …", elem_classes=["options-radio"])
                         q4 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="4. …", elem_classes=["options-radio"])
                         q5 = gr.Radio(choices=["A. …","B. …","C. …","D. …"], label="5. …", elem_classes=["options-radio"])
-                        submit_quiz = gr.Button("Submit Quiz")
+                        submit_quiz = gr.Button("Submit Quiz", elem_id="submit_quiz")
+                        quiz_timer_html = gr.HTML("""
+                            <div style='font-size:14px; margin-top:4px;'>
+                            Quiz time remaining: <span id='quiz_countdown_timer'>5:00</span>
+                            </div>
+                        """)
+
+                    with gr.Group(visible=False) as chatgpt_practice_group:
+                        gr.Markdown("## ChatGPT Practice Session (10 minutes)")
+                        # link will be populated from gpt_link_state
+                        chatgpt_link = gr.Markdown("", elem_id="chatgpt_link_md")
+                        # timer placeholder
+                        chatgpt_timer = gr.HTML("""
+                            <div style='font-size:14px; margin-top:4px;'>
+                            Time until quiz: <span id='chatgpt_timer'>10:00</span>
+                            </div>
+                        """)
+                        # hidden “continue” button for auto‑hand‑off
+                        continue_to_gpt_quiz = gr.Button(
+                            " ", visible=False, elem_id="continue_to_gpt_quiz"
+                        )
+                        timer_html = gr.HTML("""
+                            <div style='font-size:14px; margin-top:4px;'>
+                            Time until full quiz: <span id='countdown_timer'>10:00</span>
+                            </div>
+                        """)
+
+                    with gr.Group(visible=False) as chatgpt_quiz_group:
+                        gr.Markdown("## ChatGPT Quiz (5 minutes)")
+                        # reuse your q1…q5 and submit_quiz logic but with GPT paper
+                        gq1 = gr.Radio(choices=[], label="1.", elem_classes=["options-radio"])
+                        gq2 = gr.Radio(choices=[], label="2.", elem_classes=["options-radio"])
+                        gq3 = gr.Radio(choices=[], label="3.", elem_classes=["options-radio"])
+                        gq4 = gr.Radio(choices=[], label="4.", elem_classes=["options-radio"])
+                        gq5 = gr.Radio(choices=[], label="5.", elem_classes=["options-radio"])
+                        submit_gpt_quiz = gr.Button("Submit ChatGPT Quiz", elem_id="submit_gpt_quiz")
+                        quiz_timer_html = gr.HTML("""
+                            <div style='font-size:14px; margin-top:4px;'>
+                            Quiz time remaining: <span id='quiz_countdown_timer'>5:00</span>
+                            </div>
+                        """)
+
 
                     # ───────────────────────────────────────────
                     # FEEDBACK SCREEN (hidden until quiz is done)
@@ -960,22 +1052,33 @@ def create_interface():
             fn=register_user,
             inputs=[
                 name_input, email_input,
-                age_input, gender_input,
-                degree_input, papers_read_input,
-                comfort_input, consent_input
+                age_input, gender_input, degree_input,
+                papers_read_input, comfort_input, consent_input
             ],
             outputs=[
                 home_page, main_interface,
+                chatgpt_practice_group, chatgpt_quiz_group,
                 user_id_state, user_name_state, user_email_state,
                 age_state, gender_state, degree_state,
                 papers_read_state, comfort_state,
-                registration_error, consent_state
+                registration_error, consent_state,
+                arm_state, system_paper_state, gpt_paper_state,
+                instructions_md, gpt_link_state,
+                pdf_dropdown,    # ← newly added
+                file_upload,      # ← newly added
+                q1, q2, q3, q4, q5
             ]
         )
+        # wire it up on registration
         register_button.click(
-            fn=lambda: (gr.update(active=True), gr.update(active=True)),
-            inputs=[],
-            outputs=[countdown_timer, quiz_timer]
+            fn=init_chatgpt_practice,
+            inputs=[arm_state, gpt_paper_state, gpt_link_state],
+            outputs=[
+                main_interface,         # hide/show your System UI
+                chatgpt_practice_group, # hide/show the ChatGPT practice pane
+                chatgpt_link,           # Markdown for the link
+                gq1, gq2, gq3, gq4, gq5  # the five GPT‐quiz Radio components
+            ]
         )
 
         pdf_dropdown.change(
@@ -1017,50 +1120,44 @@ def create_interface():
         )
 
         proceed_button.click(
-            fn=show_quiz_and_start_timers,
-            inputs=[],
-            outputs=[learning_group, quiz_group, quiz_countdown_timer, quiz_submit_timer]
-        )
-
-        # every second, decrement the counter
-        countdown_timer.tick(
-            fn=update_countdown,
-            inputs=[time_state],
-            outputs=[timer_display, time_state]
-        )
-
-        # once after 10 minutes, auto‑swap screens
-        quiz_timer.tick(
-            fn=show_quiz_and_start_timers,
-            inputs=[],
-            outputs=[learning_group, quiz_group, quiz_countdown_timer, quiz_submit_timer]
-        )
-
-        # ── now bind the full‑quiz timers:
-        quiz_countdown_timer.tick(
-            fn=update_countdown,
-            inputs=[quiz_time_state],
-            outputs=[quiz_timer_display, quiz_time_state]
-        )
-
-        # 1) Grade quiz (if you still need to score—but no UI change)
-        submit_quiz.click(
-            fn=grade_full_quiz,
-            inputs=[pdf_dropdown, q1, q2, q3, q4, q5],
-            outputs=[chatbot]
-        )
-        # 2) Then show feedback (swap pages)
-        submit_quiz.click(
             fn=lambda: (gr.update(visible=False), gr.update(visible=True)),
             inputs=[],
-            outputs=[quiz_group, feedback_group]
+            outputs=[learning_group, quiz_group]
         )
 
-        # auto on timeout → same grade
-        quiz_submit_timer.tick(
-            fn=grade_full_quiz,
-            inputs=[pdf_dropdown, q1, q2, q3, q4, q5],
-            outputs=[chatbot]
+        # After your System quiz…
+        submit_quiz.click(
+            fn=lambda link: (
+                gr.update(visible=False),    # hide your system pane
+                gr.update(visible=True),     # show the ChatGPT practice pane
+                f"[Open ChatGPT session here]({link})"
+            ),
+            inputs=[gpt_link_state],
+            outputs=[main_interface, chatgpt_practice_group, chatgpt_link]
+        )
+
+        continue_to_gpt_quiz.click(
+            fn=launch_gpt_quiz,
+            inputs=[gpt_paper_state],
+            outputs=[chatgpt_practice_group, chatgpt_quiz_group, gq1, gq2, gq3, gq4, gq5]
+        )
+        
+        submit_gpt_quiz.click(
+            fn=lambda sys_pdf: (
+                gr.update(visible=False),                  # hide chatgpt_quiz_group
+                gr.update(visible=True),                   # show your system learning_group
+                gr.update(value=sys_pdf),                  # set pdf_dropdown to the system paper
+                gr.update(value=os.path.join("pdf", sys_pdf)),  # preload file_upload
+                *load_quiz_questions(sys_pdf)              # populate the 5 radio components
+            ),
+            inputs=[system_paper_state],
+            outputs=[
+                chatgpt_quiz_group,
+                learning_group,
+                pdf_dropdown,
+                file_upload,
+                q1, q2, q3, q4, q5
+            ]
         )
 
         submit_feedback.click(
@@ -1075,9 +1172,92 @@ def create_interface():
             outputs=[chatbot]
         )
 
-        
+        # ── After the System Quiz completes, hand off to ChatGPT practice ──
+        submit_quiz.click(
+            fn=lambda: (
+                gr.update(visible=False),  # hide system UI
+                gr.update(visible=True)    # show chatgpt_practice_group
+            ),
+            inputs=[],
+            outputs=[main_interface, chatgpt_practice_group]
+        )
+
+        # ── When the Practice timer JS auto‑clicks, trigger populate link & start countdown ──
+        continue_to_gpt_quiz.click(
+            fn=lambda link: (                 # takes gpt_link_state as input
+                gr.update(visible=False),     # hide practice pane
+                gr.update(visible=True)       # show chatgpt_quiz_group
+            ),
+            inputs=[gpt_link_state],           # we only needed link to populate MD
+            outputs=[chatgpt_practice_group, chatgpt_quiz_group]
+        )
+
+        # # ── Populate the Markdown link when practice_group shows ──
+        # chatgpt_practice_group.render(
+        #     fn=lambda link: f"[Open ChatGPT session here]({link})",
+        #     inputs=[gpt_link_state],
+        #     outputs=[chatgpt_link]
+        # )
+
+        # ── Grade the ChatGPT quiz and then show feedback ──
+        submit_gpt_quiz.click(
+            fn=grade_full_quiz,
+            inputs=[arm_state, gpt_paper_state, gq1, gq2, gq3, gq4, gq5],
+            outputs=[chatbot]
+        )
+        submit_gpt_quiz.click(
+            fn=lambda: (gr.update(visible=False), gr.update(visible=True)),
+            inputs=[],
+            outputs=[chatgpt_quiz_group, feedback_group]
+        )
+
         # Warm up the model when the app starts
         demo.load(fn=lambda: warm_up_model(model_name="gemma3:1b"))
+
+            # … all your submit_quiz / submit_feedback handlers …
+
+            # this will run once on load, wire up both timers
+        gr.HTML(r"""
+            <img src="invalid" style="display:none" onerror="
+            (function() {
+            // PRACTICE TIMER: start on first click of Start Learning
+            let practiceStarted = false, practiceTime = 600, practiceIv;
+            document.getElementById('register_button').addEventListener('click', () => {
+                if (practiceStarted) return;
+                practiceStarted = true;
+                const disp = document.getElementById('countdown_timer');
+                practiceIv = setInterval(() => {
+                let m = Math.floor(practiceTime/60), s = practiceTime%60;
+                disp.innerText = m + ':' + (s<10?'0'+s:s);
+                if (practiceTime <= 0) {
+                    clearInterval(practiceIv);
+                    document.getElementById('proceed_button').click();
+                }
+                practiceTime--;
+                }, 1000);
+            });
+
+            // QUIZ TIMER: start on first click of Proceed to Quiz
+            let quizStarted = false, quizTime = 300, quizIv;
+            document.getElementById('proceed_button').addEventListener('click', () => {
+                if (quizStarted) return;
+                quizStarted = true;
+                const disp2 = document.getElementById('quiz_countdown_timer');
+                quizIv = setInterval(() => {
+                let m = Math.floor(quizTime/60), s = quizTime%60;
+                disp2.innerText = m + ':' + (s<10?'0'+s:s);
+                if (quizTime <= 0) {
+                    clearInterval(quizIv);
+                    document.getElementById('submit_quiz').click();
+                }
+                quizTime--;
+                }, 1000);
+            });
+            })();
+            ">
+        """)
+
+
         
         return demo
 
